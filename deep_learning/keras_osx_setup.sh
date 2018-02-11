@@ -31,4 +31,3 @@ python3 -m pip install theano
 python3 -m pip install keras
 git clone https://github.com/fchollet/keras
 python examples/mnist_cnn.py 
-
