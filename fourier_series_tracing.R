@@ -1,7 +1,8 @@
 library(png)
 library(dplyr)
+library(ggplot2)
 
-ollie_channels <- readPNG('~/Downloads/ollie.png')
+ollie_channels <- readPNG('./ollie.png')
 ollie_mat <- ollie_channels[,,4] # greyscale image appears entirely in the 4th channel in this case
 ollie_mat <- apply(ollie_mat, 1, function(x){ ifelse(x > .1, 1, 0) })
 
@@ -51,6 +52,38 @@ ollie_outline <- ollie_points %>%
   mutate( y = -y + 90) # orient correctly
 plot(ollie_outline) # that's workable!
 
+# order a component sequentially via nearest neighbor- there are corner cases where this doesn't work nicely
+# input is a dataframe, output is a similar dataframe with an "order" column
+order_component <- function(component) {
+  ordered_component <- component
+  ordered_component$uid <- seq(nrow(ordered_component)) # an identifier for making life with dplyr easier
+  ordered_component$order <- NA
+  ordered_component[1, 'order'] <- 1
+  
+  current_head_uid <- 1
+  
+  # nothing tricky, n^2 repeated lookups, even though there are certainly optimizations available
+  for (trial in seq(2, nrow(component))) {
+    nearest_neighbor <- ordered_component %>%
+      filter(is.na(order)) %>%
+      mutate(
+        distance = (ordered_component[current_head_uid, 'x'] - x) ^ 2 + (ordered_component[current_head_uid, 'y'] - y) ^ 2
+      ) %>%
+      top_n(1, -distance)
+    
+    current_head_uid <- nearest_neighbor[['uid']]
+    ordered_component[current_head_uid, 'order'] <- trial
+  }
+  
+  ordered_component %>% 
+    arrange(order) %>%
+    select(-uid, -order)
+}
+
+ollie_ordered <- order_component(ollie_outline)
+
+plot(ollie_ordered$x, ollie_ordered$y)
+lines(ollie_ordered$x, ollie_ordered$y)
 
 ################
 ## build a fourier series
@@ -74,3 +107,43 @@ get_trajectory <- function(X.k,ts) {
 ollie_transform <- fft(ollie_outline$y)
 y <- get_trajectory(ollie_transform, ollie_outline$x)
 plot(ollie_outline$x, y)
+
+###### I'm too mathematically deficient to get a parameterzation out 
+###### attempt to compute a fourier series using gradient descent
+k <- 10 # the number of series to use
+fs_coefs <- matrix(0, 2, 1 + 2 * k) # dc + k terms in series, x & y
+
+eval_point <- function(coefs, point) {
+  dc <- coefs[, 1]
+  point_estimates <- dc
+  for (col_ix in seq(2, ncol(coefs), 2)) {
+    series_ix <- col_ix / 2
+    even_coef <- coefs[, col_ix]
+    odd_coef <- coefs[, col_ix]
+    point_estimates <- dc + point_estimates + even_coef * cos(series_ix * point) + 
+      odd_coef * sin(series_ix * point)
+  }
+  
+  point_estimates
+}
+
+eval_series <- function(coefs, points) {
+  t(sapply(points, function(point){ eval_point(coefs, point) }))
+}
+
+fs_loss <- function(estimators, t, xy) {
+  # unflatten the estimators which optim requires to be a vector
+  coefs <- matrix(estimators, nrow = 2)
+
+  xy_est <- eval_series(coefs, t)
+  # compute euclidean distance from the actual point
+  sum(sqrt(apply((xy_est - xy)^2, 1, sum)))
+}
+
+ollie_outline_mat <- as.matrix(ollie_ordered)
+gd_results <- optim(par = fs_coefs, t = 1:nrow(ollie_outline_mat), xy= ollie_outline_mat, fn = fs_loss,
+              control = list(maxit = 2e2))
+
+estimates <- eval_series(gd_results$par, 1:nrow(ollie_outline))
+
+plot(estimates)
