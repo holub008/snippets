@@ -461,7 +461,7 @@ To interpret:
 * The first row of each box is the feature that was split on
 * The edge labeling is the decision rule
 * `Cover` is the number of train set observations handled at the split
-* `Gain` is the improvement in the loss function made by the splot
+* `Gain` is the improvement in the loss function made by the split
 * `Value` at leaf nodes is the boost prediction
 
 Here's a "multi-plot" for visualizing structure:
