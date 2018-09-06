@@ -199,6 +199,7 @@ Notice that the selected split point has changed (and error improvement smaller)
 
 #### Forward Stagewise Boosting
 The general approach is to:
+
 * Start with a constant valued prediction for each prediction, & compute corresponding residuals
 * Fit a base learner to the residuals (a "boost"")
 * Add the boost to the ensemble built so far
@@ -251,6 +252,7 @@ AdaBoost is not implemented due to overlap with the previous and next boosting m
 
 #### Gradient Boosting
 Gradient boosting is a generalization of AdaBoost with very similar structure to Forward Stagewise Boosting. The general procedure:
+
 * Initial the predictions to a constant minimizing the loss function
 * Compute "pseudo-residuals" as the gradient of loss function wrt predictions
 * Fit a base learner (usually using L2 loss) to the pseudo-residuals (a "boost")
@@ -383,6 +385,7 @@ For an excellent exposition of this concept, see chapter 8 of ISLR or chapter 9 
 
 ### Boosting
 Boosted trees are often effective because:
+
 * they can be extremely flexible in the shapes they fit (due to many uncorrelated parameters)
 * they learn slowly (i.e. they have the capacity to be flexible without overfitting)
     * When trees are short, it allows all or a large proportion of the training observations to be considered together in each split. Contrast with Random Forest & Bagging, which need deeper trees & have fewer observations available in deeper split points.
@@ -436,6 +439,7 @@ m_xgb <- xgboost(design_matrix, label = iris$Sepal.Length,
 ```
 
 A few notes:
+
 * `nrounds` determines the number of trees in the ensemble
 * `param` can be a [range of configurations](https://xgboost.readthedocs.io/en/latest/parameter.html) in the `param`. These can be used for tuning the fit of individual trees (e.g. column sampling as in RF, minimum loss rediction for splitting, tree depth, etc.)
 * `objective` can be a character string of [predfined loss functions](https://xgboost.readthedocs.io/en/latest/parameter.html#learning-task-parameters) or a user supplied loss function
@@ -453,6 +457,7 @@ xgb.plot.tree(model = m_xgb, trees = 1:3)
 ```
 
 To interpret:
+
 * The first row of each box is the feature that was split on
 * The edge labeling is the decision rule
 * `Cover` is the number of train set observations handled at the split
