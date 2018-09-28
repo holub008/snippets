@@ -1,8 +1,10 @@
 ---
 title: "Tree Learning"
 author: "Karl Holub <kholub@tripadvisor.com>"
-date: "2018-08-31"
-output: html_document
+date: '2018-08-31'
+output:
+  pdf_document: default
+  html_document: default
 ---
 
 ```{r setup, include=FALSE}
@@ -328,9 +330,9 @@ A final note - observing the bias/variance curves above - bagging can only be ef
 See the [experiments below]() for an simplified example of how bagging may be effective.
 
 ### Random Forest
-The motivation for Random Forest is similar to Bagging, with one tweak. Often in practice, the bagged models (fit to bootstrap replicates) are highly correlated. Consider the case of a clear hierarchy of "importance" of predictors; models across bootstrap replicates will 
+The motivation for Random Forest is similar to Bagging, with one tweak. Often in practice, the bagged models (fit to bootstrap replicates) are highly correlated. Consider the case of training data with a clear hierarchy of "importance" of predictors; models across bootstrap replicates may contain very similar split points if the signal of individual predictors is stronger than the variability introduced by the bootstrap. This is a problem because it means none of the models are biased (attacking the error from different directions), and that aggregating the models isn't shrinking the variance. This is simple to intuit in the case of perfectly correlated trees (all splits are equal) - bagging the models results in the same as an individual fit.
 
-Random Forest aims to decorrelate the trees, without materially sacrificing predictive accuracy (any individual tree should have only marginally increased bias), so that aggregating them results in a larger variance reduction. Since statistics are hard, consider the MC experiment below:
+Random Forest aims to decorrelate the trees, without materially sacrificing predictive accuracy (any individual tree should have only marginally increased bias), so that aggregating them results in a larger variance reduction. Since statistics are hard, consider the MC experiment below which demonstrates this effect (namely, variance of a mean shrinks as covariance of the random sample shrinks):
 
 ```{r}
 ## generates aggregated "predictions", which are arbitrarily chosen to be means of gausian random sample
