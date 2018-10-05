@@ -55,6 +55,7 @@ overlay_boundaries <- function(boundaries, original_plot) {
 First, a concise definition: Given a set of hyperrectangles, find any set of hyperrectangles which occupy the same space with no overlap & contain at least all the original boundaries. A hyperrectangle is the space defined by the cartesian product of ranges. With less jargon, axis-aligned rectangles/prisms/volumes in arbitrary dimensions.
 
 Take an example - 2 dimension rectangles with some overlap:
+
 ```{r echo=FALSE}
 rect_2_overlap <- data.frame(
   dimension = rep(c('x','y'), 2), 
@@ -148,6 +149,7 @@ plot_rectangles(example_2d)
 
 ### Extending Boundaries
 This is as simple as picking "dimension=value" as a fixed point (while letting all other dimensions be free) for all range bounds.
+
 ```{r}
 build_fully_partitioned_space <- function(volumes) {
   volumes %>% 
@@ -163,7 +165,8 @@ build_fully_partitioned_space <- function(volumes) {
 ```
 
 Visualizing our example:
-```{r include=FALSE}
+
+```{r echo=FALSE}
 partitioned_space <- build_fully_partitioned_space(example_2d)
 original_plot <- plot_rectangles(example_2d)
 overlay_boundaries(partitioned_space, original_plot)
@@ -232,7 +235,7 @@ generate_volumes_from_partitioned_space <- function(partitioned_space, id_starte
 
 Visualizing our results (with some difficulty, there's a lot of colored rectangles):
 
-```{r include=FALSE}
+```{r echo=FALSE}
 new_volumes <- generate_volumes_from_partitioned_space(partitioned_space)
 
 renamed_volumes <- new_volumes %>% mutate(volume_id = new_volume_id)
