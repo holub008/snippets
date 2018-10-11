@@ -1,0 +1,495 @@
+---
+title: "Student Evaluation Semantic Analysis"
+author: "Karl Holub <karjholub@gmail.com>"
+date: "10/9/2018"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+library(dplyr)
+library(tidytext)
+library(tm)
+library(SnowballC)
+library(ggplot2)
+library(tidyr)
+library(ggraph)
+library(igraph)
+library(topicmodels)
+```
+
+## About
+
+This document outlines a qualitative analysis of PT student clinical performance evaluations. The evaluations are from the students' first course, and include both mid-term & final evaluations, performed both by the student and an instructor.
+
+### Goals
+
+* What are the major themes of strengths and weaknesses identified by students & clinical instructors on PT students' first clinical internships. 
+  * Outstanding question - how should mid-term & final evaluations be considered?
+* Determine if thematic analysis/qualitative analysis done by humans produces similar results to thematic analysis done by automated methods
+
+## Data Preparation
+
+Anonymized data was provided by Prof. Molly Watkins (<mwatkins2@css.edu>). The raw data is withheld from this document, minus summarizations & a few illustrative examples, to further protect privacy. So, this document & analysis cannot be reproduced without being granted data from the originator.
+
+### Format
+
+The supplied format is a csv with rows representing a single evaluation & columns:
+
+* Eval Type: "Self" if produced by a student and "CI" if produced by an instructor
+* Eval Period: "Mid-Term" and "Final", when the evaluation occurred
+* Areas of Strength: open form text (some evaluations are bulleted or numbered)
+* Areas of Improvement: ''
+
+```{r}
+evals <- read.csv('~/Downloads/CPI Data Strengths Weaknesses Anonymized.csv', header = T,
+                  stringsAsFactors = FALSE) %>%
+  select(-X, -X.1) %>% 
+  mutate(
+    eval_id = row_number()
+  )
+
+# cast to tibble for clean printing
+evals %>% as_tibble() %>% head()
+```
+
+Looking at a small sampling of the entire text review:
+
+```{r}
+evals[8:11,'Areas.of.Strength']
+```
+
+### Data Cleansing
+
+#### Tidy Representation
+
+Tidy representation dictates that each row in a tidy data frame should be an atomic element - in this case, a word. To build a tidy representation, each evaluation is split on whitespace into tokens:
+
+```{r}
+tokenized_aos <- evals %>%
+  select(-Areas.for.Further.Development, -Recommendations) %>%
+  unnest_tokens(word, Areas.of.Strength,
+                strip_numeric = TRUE)
+
+head(tokenized_aos)
+```
+
+```{r include=FALSE}
+tokenized_aofd <- evals %>%
+  select(-Areas.of.Strength, -Recommendations) %>%
+  unnest_tokens(word, Areas.for.Further.Development,
+                strip_numeric = TRUE) %>%
+  anti_join(get_stopwords('en'), by = 'word')
+```
+
+Note that `unnest_tokens()` does a lot of additional work:
+
+* punctuation has been removed
+* numeric & other text types have been removed
+* all words have been lowercased (this is valuable because it allows like words with different capitilization to be matched to one another)
+
+#### Stopwords
+
+"Stopwords" are common English words that don't convey much meaning & aren't likely to be useful to a semantic analysis. Removing them: 
+
+```{r}
+tokenized_aos <- tokenized_aos %>%
+  anti_join(get_stopwords('en'), by = 'word')
+```
+
+Some notes:
+
+  * Stopword collection is [published here](https://github.com/stopwords-iso/stopwords-iso). It is drawn from a wide variety of sources and intended to be a standard.
+  * Notably, these stopwords include most "person" & gendered words, which is highly desirable for this analysis.
+    * Gendered words (e.g. her, his, she) provide variation across evaluations, but are unlikely to be constructive to thematic analysis (unless it's hypothesized men & women experience different strengths & areas for improvement, which isn't an operating question).
+    * possessive & "person" identifying words (e.g. myself, their, I) would provide variation across evaluations, but it would generally serve to differentiate student & instructor evaluations in a non-constructive way (heuristic being students use first person & instructors third person)
+
+#### Stemming
+
+Another step to reduce words to a common form is stemming. The goal of stemming is to remove word endings (e.g. s, ing, ed) corresponding to verb conjugations, tense, possessive forms, etc. that may make matching like words difficult.
+
+Below, the [Porter Stemmer](http://snowball.tartarus.org/algorithms/porter/stemmer.html) is used to stem words:
+
+```{r}
+tokenized_stemmed_aos <- tokenized_aos %>%
+  mutate(word = wordStem(word)) %>%
+  filter(word != '')
+
+head(tokenized_stemmed_aos)
+```
+
+```{r include=FALSE}
+tokenized_stemmed_aofd <- tokenized_aofd %>%
+  mutate(word = wordStem(word)) %>%
+  filter(word != '')
+```
+
+Note that some words are stemmed to non-english (e.g. "goniometer" stemmed to "goniomet") but interprettability of these "words" is not lost.
+
+### High Level Characteristics
+
+Before diving into sentiment analysis, which may be trickier to interpret, high level characteristics of the cleansed evaluations are investigated:
+
+#### Common words
+
+##### Student Reported Areas of Strength
+
+```{r}
+tokenized_stemmed_aos %>%
+  filter(Eval.Type == 'Self') %>% 
+  group_by(word) %>%
+  count() %>%
+  arrange(-n)
+```
+
+##### Instructor Reported Areas of Strength
+
+```{r}
+tokenized_stemmed_aos %>%
+  filter(Eval.Type == 'CI') %>% 
+  group_by(word) %>%
+  count() %>%
+  arrange(-n)
+```
+
+##### Student Reported Areas of Further Development
+
+```{r}
+tokenized_stemmed_aofd %>%
+  filter(Eval.Type == 'Self') %>% 
+  group_by(word) %>%
+  count() %>%
+  arrange(-n)
+```
+
+##### Instructor Reported Areas of Further Development
+
+```{r}
+tokenized_stemmed_aofd %>%
+  filter(Eval.Type == 'CI') %>% 
+  group_by(word) %>%
+  count() %>%
+  arrange(-n)
+```
+
+##### Frequency Correlation
+
+Here is a graphical comparison of student to instructor word frequencies across both midterm and final evaluations, for strengths.
+```{r}
+paired_frequencies <- rbind(tokenized_stemmed_aos) %>% 
+  count(Eval.Type, word) %>%
+  group_by(Eval.Type) %>%
+  mutate(proportion = n / sum(n)) %>% 
+  select(-n) %>% 
+  spread(Eval.Type, proportion) %>%
+  mutate_at(c('CI', 'Self'), function(x){ ifelse(is.na(x), 0, x) })
+
+ggplot(paired_frequencies, aes(CI, Self)) +
+    geom_point() +
+    geom_abline(color = "gray40", lty = 2) + 
+    geom_text(aes(label = word), check_overlap = TRUE, vjust = 1.5)
+
+```
+
+Zooming into the meat of the comparison:
+
+```{r}
+ggplot(paired_frequencies, aes(CI, Self)) +
+  coord_cartesian(ylim = c(.001, .015),
+                  xlim = c(.001, .015)) +
+  geom_point() +
+  geom_abline(color = "gray40", lty = 2) + 
+  geom_text(aes(label = word), check_overlap = TRUE, vjust = 1.5)
+```
+
+Similarly for areas for improvement:
+
+```{r}
+paired_frequencies <- rbind(tokenized_stemmed_aofd) %>% 
+  count(Eval.Type, word) %>%
+  group_by(Eval.Type) %>%
+  mutate(proportion = n / sum(n)) %>% 
+  select(-n) %>% 
+  spread(Eval.Type, proportion) %>%
+  mutate_at(c('CI', 'Self'), function(x){ ifelse(is.na(x), 0, x) })
+
+ggplot(paired_frequencies, aes(CI, Self)) +
+    coord_cartesian(ylim = c(.003, .02),
+                    xlim = c(.003, .02)) +
+    geom_point() +
+    geom_abline(color = "gray40", lty = 2) + 
+    geom_text(aes(label = word), check_overlap = TRUE, vjust = 1.5)
+```
+
+#### Review Length
+
+```{r}
+rbind(
+  tokenized_stemmed_aofd,
+  tokenized_stemmed_aos,
+  stringsAsFactors = FALSE
+) %>%
+  group_by(eval_id, Eval.Type) %>%
+  summarize(
+    review_length = n_distinct(word)
+  ) %>%
+  ggplot() +
+    geom_violin(aes(review_length, x = Eval.Type), fill = 'cadetblue3') +
+    xlab('Evaluation Type') +
+    ylab('Review Length (words)')
+```
+
+We see that instructors tend to give longer evaluations (mode ~30 words) than students (mode ~20 words).
+
+### Unigram Sentiment Analysis
+
+Several bodies of work have produced unigram (single word) sentiment scores. These lexicons include:
+
+* [NRC](http://saifmohammad.com/WebPages/NRC-Emotion-Lexicon.htm) - words are assigned one or more qualitative sentiments like "anger", "sadness", "surprise", "trust", and more
+* [AFINN](http://www2.imm.dtu.dk/pubdb/views/publication_details.php?id=6010) - words are assigned a single score ranging in `-5` to `5` representing how negative to positive a sentiment the word represents.
+
+In both cases, sentiment can be analyzed across self & instructor evaluations using aggregate averages and counts. Note that in order to correctly match words to the lexicon, non-stemmed data is used.
+
+#### NRC
+Areas of strength, for both mid-term and final evaluations:
+
+```{r}
+tokenized_aos %>%
+  inner_join(get_sentiments('nrc'), by = 'word') %>%
+  group_by(sentiment, Eval.Type) %>%
+  count() %>%
+  group_by(Eval.Type) %>%
+  mutate(
+    n = n / sum(n)
+  ) %>%
+  ungroup() %>%
+  ggplot() +
+    geom_bar(aes(reorder(sentiment, -n), n, fill = Eval.Type), 
+             stat = 'identity', position = 'dodge')
+```
+
+And areas of improvement:
+
+```{r}
+tokenized_aofd %>%
+  inner_join(get_sentiments('nrc'), by = 'word') %>%
+  group_by(sentiment, Eval.Type) %>%
+  count() %>%
+  group_by(Eval.Type) %>%
+  mutate(
+    n = n / sum(n)
+  ) %>%
+  ungroup() %>%
+  ggplot() +
+    geom_bar(aes(reorder(sentiment, -n), n, fill = Eval.Type), 
+             stat = 'identity', position = 'dodge')
+```
+
+Interstingly, perhaps unsurprisingly, student evaluations are more likely to have sad, angry, fearful and negative sentiments than instructor evaluations (this begs a significance test).
+
+Finally, note that the join is quite lossy, suggesting that 
+
+#### AFINN
+Areas of strength, for both mid-term and final evaluations:
+
+```{r}
+tokenized_aos %>%
+  inner_join(get_sentiments('afinn'), by = 'word') %>%
+  group_by(Eval.Type) %>%
+  summarize(
+    afinn = mean(score)
+  ) %>%
+  ggplot() +
+    geom_bar(aes(Eval.Type, afinn, fill = Eval.Type), 
+             stat = 'identity', position = 'dodge')
+```
+
+Matching expectation, we find student evaluations to be a bit more negative but both are generally positive.
+
+Looking at areas for improvement:
+
+```{r}
+tokenized_aofd %>%
+  inner_join(get_sentiments('afinn'), by = 'word') %>%
+  group_by(Eval.Type) %>%
+  summarize(
+    afinn = mean(score)
+  ) %>%
+  ggplot() +
+    geom_bar(aes(Eval.Type, afinn, fill = Eval.Type), 
+             stat = 'identity', position = 'dodge')
+```
+
+#### Bigram Frequency
+
+For far, individual words ("unigrams") have been investigated. However, sequential pairs of words, "bigrams" may further contextualize words.
+
+```{r}
+aos_bigrams <- evals %>%
+  select(-Areas.for.Further.Development, -Recommendations) %>%
+  unnest_tokens(bigram, Areas.of.Strength,
+                token = "ngrams", n = 2) %>%
+  separate(bigram, c('word1', 'word2'), sep = ' ') %>%
+  filter(!word1 %in% stopwords('en')) %>%
+  filter(!word2 %in% stopwords('en')) %>%
+  group_by(word1, word2) %>%
+  count(sort = TRUE)
+
+head(aos_bigrams)
+
+```
+
+Visualizing these relationships:
+
+```{r}
+aos_bigram_graph <- aos_bigrams %>%
+  filter(n > 2) %>%
+  graph_from_data_frame()
+
+ggraph(aos_bigram_graph, layout = "fr") +
+  geom_edge_link(aes(edge_alpha = n)) +
+  geom_node_point() +
+  geom_node_text(aes(label = name), 
+                 vjust = 1, hjust = 1, size = 2)
+
+```
+
+Similarly for areas of further development:
+
+```{r echo=FALSE}
+
+aofd_bigrams <- evals %>%
+  select(-Areas.of.Strength, -Recommendations) %>%
+  unnest_tokens(bigram, Areas.for.Further.Development,
+                token = "ngrams", n = 2) %>%
+  separate(bigram, c('word1', 'word2'), sep = ' ') %>%
+  filter(!word1 %in% stopwords('en')) %>%
+  filter(!word2 %in% stopwords('en')) %>%
+  group_by(word1, word2) %>%
+  count(sort = TRUE)
+
+aofd_bigram_graph <- aofd_bigrams %>%
+  filter(n > 2) %>%
+  graph_from_data_frame()
+
+ggraph(aofd_bigram_graph, layout = "fr") +
+  geom_edge_link(aes(edge_alpha = n)) +
+  geom_node_point() +
+  geom_node_text(aes(label = name), 
+                 vjust = 1, hjust = 1, size = 2)
+```
+
+### Sentiment Analysis
+
+#### PCA
+
+```{r}
+aos_tf <- tokenized_stemmed_aos %>%
+  mutate(presence = 1) %>%
+  cast_dtm(eval_id, word, presence)
+
+pca_out <- prcomp(aos_tf, center = TRUE, scale = TRUE)
+
+plot(pca_out)
+```
+
+The proportion of variance explained is not particularly convincing - no principal component describes an outstanding amount of variation. This isn't particularly suprising given the dimensionality of the data. Interpretting the loadings:
+
+```{r}
+names(sort(pca_out$rotation[,1]))[c(1:50, (nrow(pca_out$rotation)-50):nrow(pca_out$rotation))]
+```
+
+This loading does not produce a particularly obvious/interprettable spectrum of words. Investigating further loadings, the data seems too sparse for PCA to be of interpretative use.
+
+#### LDA
+
+```{r} 
+aos_instructors_tf <- tokenized_stemmed_aos %>%
+  filter(Eval.Type == 'CI') %>%
+  mutate(presence = 1) %>%
+  cast_dtm(eval_id, word, presence)
+aos_students_tf <- tokenized_stemmed_aos %>%
+  filter(Eval.Type == 'Self') %>%
+  mutate(presence = 1) %>%
+  cast_dtm(eval_id, word, presence)
+aofd_instructors_tf <- tokenized_stemmed_aofd %>%
+  filter(Eval.Type == 'CI') %>%
+  mutate(presence = 1) %>%
+  cast_dtm(eval_id, word, presence)
+aofd_students_tf <- tokenized_stemmed_aofd %>%
+  filter(Eval.Type == 'Self') %>%
+  mutate(presence = 1) %>%
+  cast_dtm(eval_id, word, presence)
+
+topics <- 2
+lda_aos_instructors <- LDA(aos_instructors_tf, k = topics, control = list(seed = 55414))
+lda_aos_students <- LDA(aos_students_tf, k = topics, control = list(seed = 55414))
+lda_aofd_instructors <- LDA(aofd_instructors_tf, k = topics, control = list(seed = 55414))
+lda_aofd_students <- LDA(aofd_students_tf, k = topics, control = list(seed = 55414))
+
+aos_instructors_topics <- tidy(lda_aos_instructors, matrix = "beta") %>%
+  mutate(
+    eval.type = 'CI',
+    area = "strengths"
+  )
+aos_students_topics <- tidy(lda_aos_students, matrix = "beta") %>%
+  mutate(
+    eval.type = 'Self',
+    area = "strengths"
+  )
+aofd_instructors_topics <- tidy(lda_aofd_instructors, matrix = "beta") %>%
+  mutate(
+    eval.type = 'CI',
+    area = "improvement"
+  )
+aofd_students_topics <- tidy(lda_aofd_students, matrix = "beta") %>%
+  mutate(
+    eval.type = 'Self',
+    area = "improvement"
+  )
+
+rbind(
+  aos_instructors_topics,
+  aos_students_topics
+) %>%
+  group_by(eval.type, area, topic) %>%
+  top_n(10, beta) %>%
+  ungroup() %>%
+  arrange(-beta) %>%
+  mutate(term = reorder(term, beta)) %>%
+  ggplot(aes(term, beta, fill = factor(topic))) +
+  geom_col(show.legend = FALSE) +
+  facet_wrap(~ topic + eval.type + area, scales = "free") +
+  coord_flip()
+```
+
+```{r}
+rbind(
+  aofd_instructors_topics,
+  aofd_students_topics
+) %>%
+  group_by(eval.type, area, topic) %>%
+  top_n(10, beta) %>%
+  ungroup() %>%
+  arrange(-beta) %>%
+  mutate(term = reorder(term, beta)) %>%
+  ggplot(aes(term, beta, fill = factor(topic))) +
+  geom_col(show.legend = FALSE) +
+  facet_wrap(~ topic + eval.type + area, scales = "free") +
+  coord_flip()
+```
+
+#### Word2Vec
+
+
+##### Clustering
+
+
+### Ideas
+
+* How similar are student evaluations to instructor evaluations at midterms? Compare to similarity to instructor evaluations at finals. This could be done with an embedding (as in sentence2vec) or LSA.
+* Are student evaluations more similar to other student evaluations, or are they more similar to instructor evaluations of them?
+* PCA on term-frequency matrix (looking at loadings)
+* 
+* Cluster students & analyze cluster characteristics
+* Predict if a document is pre/post 
+
