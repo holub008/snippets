@@ -206,22 +206,22 @@ generate_volumes_from_partitioned_space <- function(partitioned_space, id_starte
     
     if (nrow(subspace_volumes) == 0) {
       # case this is the first dimension - there's nothing to add onto
-      new_volume_id <- paste0(id_starter, '_', dimension_of_interest, '_', bound_ix)
-      new_dimension_bounds <- list(new_volume_id = new_volume_id, 
+      volume_id <- paste0(id_starter, '_', dimension_of_interest, '_', bound_ix)
+      new_dimension_bounds <- list(volume_id = volume_id, 
                                    min = lower_bound, 
                                    max = upper_bound,
                                    dimension = dimension_of_interest)
     }
     else {
       # case this is after the first dimension - create a new volume for each subspace volume with the new bounds added (cartesian product)
-      new_dimension_bounds <- lapply(unique(subspace_volumes$new_volume_id), function(new_volume_id) {
-        list(new_volume_id = paste0(new_volume_id, '_', dimension_of_interest, '_', bound_ix), # TODO this form of creating an ID could get costly in higher dimensions
+      new_dimension_bounds <- lapply(unique(subspace_volumes$volume_id), function(volume_id) {
+        list(volume_id = paste0(volume_id, '_', dimension_of_interest, '_', bound_ix), # TODO this form of creating an ID could get costly in higher dimensions
              min = lower_bound, 
              max = upper_bound,
              dimension = dimension_of_interest)
       }) %>% bind_rows() %>%
         rbind(subspace_volumes %>%
-                mutate(new_volume_id = paste0(new_volume_id, '_', dimension_of_interest, '_', bound_ix)),
+                mutate(volume_id = paste0(volume_id, '_', dimension_of_interest, '_', bound_ix)),
               stringsAsFactors= FALSE)
     }
     
@@ -237,9 +237,7 @@ Visualizing our results (with some difficulty, there's a lot of colored rectangl
 
 ```{r echo=FALSE}
 new_volumes <- generate_volumes_from_partitioned_space(partitioned_space)
-
-renamed_volumes <- new_volumes %>% mutate(volume_id = new_volume_id)
-p <- plot_rectangles(renamed_volumes)
+p <- plot_rectangles(new_volumes)
 overlay_boundaries(partitioned_space, p)
 ```
 
@@ -260,18 +258,18 @@ prune_uncovering_volumes <- function(new_volumes, original_volumes) {
       select(-dimension.x, -dimension.y)
   
   covering_volumes <- data.frame()
-  for (new_volume_id_to_check in unique(new_volumes$new_volume_id)) {
+  for (new_volume_id_to_check in unique(new_volumes$volume_id)) {
     volume <- new_volumes %>%
-      filter(new_volume_id == new_volume_id_to_check)
+      filter(volume_id == new_volume_id_to_check)
     
     in_covering_space <- FALSE
     for (original_volume_id_to_check in unique(original_volumes$volume_id)) {
       original_volume_to_check <- original_to_new_volumes %>%
-        filter(volume_id == original_volume_id_to_check)
+        filter(volume_id.x == original_volume_id_to_check)
       # here we make sure all dimensions are contained
       volume_dimensions_contained <- original_to_new_volumes %>%
-        filter(volume_id == original_volume_id_to_check & 
-               new_volume_id == new_volume_id_to_check) %>%
+        filter(volume_id.x == original_volume_id_to_check & 
+               volume_id.y == new_volume_id_to_check) %>%
         pull(dimension) %>% 
         setequal(original_volume_to_check$dimension)
       
@@ -288,9 +286,7 @@ prune_uncovering_volumes <- function(new_volumes, original_volumes) {
     }
   }
   
-  covering_volumes %>%
-    mutate(volume_id = new_volume_id) %>%
-    select(-new_volume_id)
+  covering_volumes
 }
 ```
 
@@ -299,8 +295,7 @@ And visualizing:
 ```{r echo=FALSE}
 unoverlapped_hyperrectangles <- prune_uncovering_volumes(new_volumes, example_2d)
 
-plot_rectangles(unoverlapped_hyperrectangles %>% 
-                  mutate(volume_id = new_volume_id))
+plot_rectangles(unoverlapped_hyperrectangles)
 ```
 
 ### Putting It All Together
