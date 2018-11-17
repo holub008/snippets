@@ -370,10 +370,12 @@ In terms of runtime, I am almost certain this algorithm is suboptimal; in the wo
 
 ```{r}
 fuse_abutted_hyperrectangles <- function(volumes) {
-  fuses_possible <- TRUE
   fused_volumes <- volumes
   dimensionality <- n_distinct(volumes$dimension)
-  
+
+  fuses_possible <- TRUE
+  fused_volume_unique_id <- 1
+
   while (fuses_possible) {
     fuses_possible <- FALSE
     
@@ -387,7 +389,6 @@ fuse_abutted_hyperrectangles <- function(volumes) {
       ) %>%
       distinct(dimension, volume_id.left, volume_id.right, min, max) 
     
-    fused_volume_unique_id <- 1
     for (candidate_fuse_ix in seq_len(nrow(candidate_fuses))) {
       candidate_fuse <- candidate_fuses[candidate_fuse_ix, ]
       # subvolume because we ignore the dimension of the fuse
@@ -423,7 +424,7 @@ fuse_abutted_hyperrectangles <- function(volumes) {
         fused_volume_unique_id <- fused_volume_unique_id + 1
         fused_volumes <- rbind(fused_volumes,
                                fused_volume,
-                               stringsAsFactors = FASE)
+                               stringsAsFactors = FALSE)
         
         # clean up the old volumes
         fused_volumes <- fused_volumes %>%
@@ -442,7 +443,8 @@ Running & visualizing on our prior example:
 unoverlapped_hyperrectangles <- unoverlapped_hyperrectangles %>%
   mutate(volume_id = new_volume_id) %>%
   select(-new_volume_id)
-fuse_abutted_hyperrectangles(unoverlap_hyperrectangles)
-plot_rectangles(unoverlapped_hyperrectangles)
-
+fused_unoverlapped_hyperrectangles <- fuse_abutted_hyperrectangles(unoverlapped_hyperrectangles)
+plot_rectangles(fused_unoverlapped_hyperrectangles)
 ```
+
+And just like that, we've gone from 15 to 7 volumes! As stated earlier, the optimality of this approach is not certain.
