@@ -295,9 +295,10 @@ prune_uncovering_volumes <- function(new_volumes, original_volumes) {
 And visualizing:
 
 ```{r}
-final_unoverlapped_hyperrectangles <- prune_uncovering_volumes(new_volumes, example_2d)
+unoverlapped_hyperrectangles <- prune_uncovering_volumes(new_volumes, example_2d)
 
-plot_rectangles(final_unoverlapped_hyperrectangles %>% mutate(volume_id = new_volume_id))
+plot_rectangles(unoverlapped_hyperrectangles %>% 
+                  mutate(volume_id = new_volume_id))
 ```
 
 ### Putting It All Together
@@ -347,4 +348,101 @@ compute_hypervolume <- function(volumes) {
 }
 
 compute_hypervolume(example_2d)
+```
+
+## Fusing
+Several months after writing this (Nov. 2018), I revisited this topic with the desire to optimize the solution. In the context of RuleFit, it is desirable to have as few volumes as possible; it creates fewer model features, meaning fewer model parameters to the benefit of:
+
+* Improved interpretability - fewer parameters means less information for a human observer to store in memory
+* Improved LASSO runtime (even the best LASSO algorithms are super-linear in the number of parameters being fit)
+
+Here I aim to extend the algorithm to "fuse" abutted hyperrectangles that preserve the valid solution. The algorithm in English:
+
+* For each dimension, find all pairs of volumes that have equal (min,max) or (max,min) range boundaries
+* For each abutted pair, iterate over all other dimensions over which they do not abutt. 
+    * Fusable hyperrectangles have equal ranges on all others dimensions
+    * The fused hyperrectangle is computed as the set of all other dimension ranges, and the sequential joining of the ranges of the abutted dimension
+* Repeat this process until no fusings are made.
+
+The key to understanding the correctness of this approach is that abutting on more than 1 dimension is not possible, since the space has been unoverlapped; So, what of the remaining dimensions? If the hyperrectangles can be fused into a valid hyperrectangle, the other dimension ranges must all be equal! If they weren't the space we're describing is no longer a cartesian product of orthogonal ranges (since two unmatched ranges lie parallel).
+
+In terms of runtime, I am almost certain this algorithm is suboptimal; in the worst case, we could repeat the inner process equal to the number of hypervolumes being fused. There is almost certainly a deeper structure to the problem that is being ignored in doing this. In terms of final solution, I am not sure if this algorithm is optimal. The hierarchical nature (e.g. fuse a,b, then fuse ab,c) of building the solution suggests there are several paths towards the optima. It's unclear if the solution space is "convex", or if we've landed in a local optima. Due to the precise requirements of the fusings being rectangular, I have a gut feeling & no mathematical justification that the solution space is in fact convex. 
+
+```{r}
+fuse_abutted_hyperrectangles <- function(volumes) {
+  fuses_possible <- TRUE
+  fused_volumes <- volumes
+  dimensionality <- n_distinct(volumes$dimension)
+  
+  while (fuses_possible) {
+    fuses_possible <- FALSE
+    
+    candidate_fuses <- fused_volumes %>%
+      inner_join(volumes, by = c('dimension' = 'dimension',
+                                 'max' = 'min'),
+                 suffix = c('.left', '.right')) %>%
+      filter(volume_id.left != volume_id.right) %>%  # this should only happen if a range is of size 0
+      mutate(
+        max = max.right # since the left max (where the abuttment happens on the right min) must be less than the right max
+      ) %>%
+      distinct(dimension, volume_id.left, volume_id.right, min, max) 
+    
+    fused_volume_unique_id <- 1
+    for (candidate_fuse_ix in seq_len(nrow(candidate_fuses))) {
+      candidate_fuse <- candidate_fuses[candidate_fuse_ix, ]
+      # subvolume because we ignore the dimension of the fuse
+      subvolume_left <- fused_volumes %>%
+        filter(volume_id == candidate_fuse$volume_id.left & dimension != candidate_fuse$dimension)
+      subvolume_right <- fused_volumes %>%
+        filter(volume_id == candidate_fuse$volume_id.right & dimension != candidate_fuse$dimension)
+      
+      # this case implies the volume has already been joined
+      # meaning the candidate fuse may not be valid any longer - catch it next iteration
+      if (nrow(subvolume_left) == 0 || nrow(subvolume_right) == 0) {
+        next()
+      }
+      
+      stopifnot(nrow(subvolume_left) == nrow(subvolume_right) && 
+                  n_distinct(subvolume_left$dimension) == n_distinct(subvolume_right$dimension))
+      
+      dimension_matches <- subvolume_left %>%
+        inner_join(subvolume_right, by = c('dimension' = 'dimension',
+                                        'min' = 'min',
+                                        'max' = 'max'))
+      if (nrow(dimension_matches) == dimensionality - 1) {
+        fuses_possible <- TRUE
+        
+        # add in the new volume
+        fused_volume <- rbind(
+          dimension_matches %>% select(min, max, dimension),
+          candidate_fuse %>% select(min, max, dimension),
+          stringsAsFactors = FALSE)
+        fused_volume$volume_id <- paste0(candidate_fuse$volume_id.left, '_', 
+                                         candidate_fuse$volume_id.right, '_', 
+                                         as.character(fused_volume_unique_id))
+        fused_volume_unique_id <- fused_volume_unique_id + 1
+        fused_volumes <- rbind(fused_volumes,
+                               fused_volume,
+                               stringsAsFactors = FASE)
+        
+        # clean up the old volumes
+        fused_volumes <- fused_volumes %>%
+          filter(volume_id != candidate_fuse$volume_id.left & volume_id != candidate_fuse$volume_id.right)
+      }
+    }
+  }
+  
+  return(fused_volumes)
+}
+```
+
+Running & visualizing on our prior example:
+
+```{r}
+unoverlapped_hyperrectangles <- unoverlapped_hyperrectangles %>%
+  mutate(volume_id = new_volume_id) %>%
+  select(-new_volume_id)
+fuse_abutted_hyperrectangles(unoverlap_hyperrectangles)
+plot_rectangles(unoverlapped_hyperrectangles)
+
 ```
