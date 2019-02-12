@@ -102,10 +102,14 @@ class PlinkoSystem:
 
     def solve(self, target_probabilities):
         starting_guesses = [.5 for _ in range(self._number_of_pegs)]
-        # TODO use some nonlinear solver
-        # I wanted to use the black box magic scipy.optimizers.fsolve, but it required a well determined system
-        # I suppose I could supply dummie functions, but that may bork gradients
-        pass
+        # fsolve requires "square" problems - so we fill in 0s. this may bork gradients
+        missing_equations = [.1 for _ in range(self._number_of_pegs - len(self._bucket_index_to_paths.keys()))]
+        print(missing_equations)
+        left_peg_probability_solutions = fsolve(lambda x:
+                                                self._evaluate_for_roots(x, target_probabilities) + missing_equations,
+                                                starting_guesses)
+        return left_peg_probability_solutions
+
 
 
 def _traverse(adjacency, current_path):
@@ -122,7 +126,7 @@ def _traverse(adjacency, current_path):
 
 class Board:
     def __init__(self, depth):
-        self._number_of_pegs = depth * (depth + 1) / 2
+        self._number_of_pegs = int(depth * (depth + 1) / 2)
         self._adjacency = _generate_plinko_adjacency(depth)
         self._left_probabilities = None
         self._bucket_probabilities = None
@@ -139,8 +143,9 @@ class Board:
         pass
 
 if __name__ == '__main__':
-    board = Board(5)
+    board = Board(3)
     system = board.resolve_to_system()
-    system.evaluate([.5 for _ in range(15)])
+    system.evaluate([.5 for _ in range(6)])
     # errors on first propagation
-    system._evaluate_for_roots([.5 for _ in range(15)], {ix: .2 for ix in range(15, 21)})
+    system._evaluate_for_roots([.5 for _ in range(6)], {ix: .25 for ix in range(6, 10)})
+    left_peg_probabilities = system.solve({ix: .2 for ix in range(6, 10)})
