@@ -90,7 +90,7 @@ class PlinkoSystem:
     def _evaluate_for_roots(self, probabilities, target_probabilities):
         """
         :param probabilities: a list of left turn probabilities corresponding to each peg
-        :param target_probabilties: a dict from bucket index to target probability
+        :param target_probabilities: a dict from bucket index to target probability
         :return: a tuple of evaluated bucket probabilities
         """
         evaluations = self.evaluate(probabilities)
@@ -102,13 +102,12 @@ class PlinkoSystem:
 
     def solve(self, target_probabilities):
         starting_guesses = [.5 for _ in range(self._number_of_pegs)]
-        bounds = [(0,1) for _ in range(self._number_of_pegs)]
+        bounds = [(0, 1) for _ in range(self._number_of_pegs)]
         left_peg_probability_solutions = minimize(lambda x:
-                                                  sum(abs(x) for x in self._evaluate_for_roots(x, target_probabilities)),
+                                                  sum(x**2 for x in self._evaluate_for_roots(x, target_probabilities)),
                                                   starting_guesses,
-                                                  bounds = bounds)
+                                                  bounds=bounds)
         return left_peg_probability_solutions.x
-
 
 
 def _traverse(adjacency, current_path):
@@ -146,7 +145,7 @@ class Board:
         pass
 
 if __name__ == '__main__':
-    board = Board(3)
+    board = Board(4)
     system = board.resolve_to_system()
     bucket_indices = board.get_bucket_indices()
     left_peg_probabilities = system.solve({ix: 1/len(bucket_indices) for ix in bucket_indices})
