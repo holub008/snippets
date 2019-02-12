@@ -2,21 +2,20 @@ import numpy as np
 from scipy.optimize import fsolve
 
 
-
 def _generate_plinko_adjacency(depth):
     number_of_pegs = int(depth * (depth + 1) / 2)
     number_of_buckets = depth + 1
     adjacency = np.zeros([number_of_pegs + number_of_buckets, number_of_pegs + number_of_buckets])
 
-    # note that this can be done more cleanly (by setting 1's at row_ix + depth and row_ix + depth +1)
+    # note that this can be done more cleanly (by setting 1's at 2 * row_ix + 1 and 2 * row_ix + 2)
     # but I think this is conceptually clearer
     total_pegs = 0
     for level in range(1, depth + 1):
         # each level is the same length as its depth
         for parent_peg_ix in range(total_pegs, total_pegs + level):
             # the to left peg is always offset by the length of the parent row, right length of parent row + 1
-            adjacency[parent_peg_ix, parent_peg_ix + depth] = 1
-            adjacency[parent_peg_ix, parent_peg_ix + depth + 1] = 1
+            adjacency[parent_peg_ix, parent_peg_ix + level] = 1
+            adjacency[parent_peg_ix, parent_peg_ix + level + 1] = 1
 
             total_pegs += 1
 
@@ -51,6 +50,13 @@ class Path:
             product *= probabilities[peg_index] if self._left_turns[ix] else (1 - probabilities[peg_index])
 
         return product
+
+    def __repr__(self):
+        turn_strings = ['L' if x else 'R' for x in self._left_turns] + ['end']
+        return "Path(%s)" % (list(zip(self._indices, turn_strings)))
+
+    def __str__(self):
+        return self.__repr__()
 
 
 class PlinkoSystem:
@@ -89,10 +95,10 @@ class PlinkoSystem:
         """
         evaluations = self.evaluate(probabilities)
         bucket_outcomes = []
-        for bucket_index in evaluations.keys().sorted():
+        for bucket_index in sorted(evaluations.keys()):
             bucket_outcomes.append(evaluations[bucket_index] - target_probabilities[bucket_index])
 
-        return bucket_index
+        return bucket_outcomes
 
     def solve(self, target_probabilities):
         starting_guesses = [.5 for _ in range(self._number_of_pegs)]
@@ -104,12 +110,12 @@ class PlinkoSystem:
 
 def _traverse(adjacency, current_path):
     last_index = current_path.get_last_from_index()
-    traversible_indices = np.nonzero(adjacency[last_index,])[0]
-    if not len(traversible_indices) == 2:
+    traversable_indices = np.nonzero(adjacency[last_index, ])[0]
+    if not len(traversable_indices) == 2:
         return current_path,
 
-    left_traversal = current_path.append(traversible_indices[0], True)
-    right_traversal = current_path.append(traversible_indices[1], False)
+    left_traversal = current_path.append(traversable_indices[0], True)
+    right_traversal = current_path.append(traversable_indices[1], False)
 
     return _traverse(adjacency, left_traversal) + _traverse(adjacency, right_traversal)
 
@@ -122,7 +128,7 @@ class Board:
         self._bucket_probabilities = None
 
     def resolve_to_system(self):
-        all_paths = _traverse(self._adjacency, Path((0)))
+        all_paths = _traverse(self._adjacency, Path((0,)))
         return PlinkoSystem(all_paths, self._number_of_pegs)
 
     def set_probabilities(self, peg_left_probabilities, bucket_probabilities):
@@ -134,3 +140,7 @@ class Board:
 
 if __name__ == '__main__':
     board = Board(5)
+    system = board.resolve_to_system()
+    system.evaluate([.5 for _ in range(15)])
+    # errors on first propagation
+    system._evaluate_for_roots([.5 for _ in range(15)], {ix: .2 for ix in range(15, 21)})
