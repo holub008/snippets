@@ -1,5 +1,5 @@
 import numpy as np
-from scipy.optimize import fsolve
+from scipy.optimize import minimize
 
 
 def _generate_plinko_adjacency(depth):
@@ -102,13 +102,12 @@ class PlinkoSystem:
 
     def solve(self, target_probabilities):
         starting_guesses = [.5 for _ in range(self._number_of_pegs)]
-        # fsolve requires "square" problems - so we fill in 0s. this may bork gradients
-        missing_equations = [.1 for _ in range(self._number_of_pegs - len(self._bucket_index_to_paths.keys()))]
-        print(missing_equations)
-        left_peg_probability_solutions = fsolve(lambda x:
-                                                self._evaluate_for_roots(x, target_probabilities) + missing_equations,
-                                                starting_guesses)
-        return left_peg_probability_solutions
+        bounds = [(0,1) for _ in range(self._number_of_pegs)]
+        left_peg_probability_solutions = minimize(lambda x:
+                                                  sum(abs(x) for x in self._evaluate_for_roots(x, target_probabilities)),
+                                                  starting_guesses,
+                                                  bounds = bounds)
+        return left_peg_probability_solutions.x
 
 
 
@@ -126,6 +125,7 @@ def _traverse(adjacency, current_path):
 
 class Board:
     def __init__(self, depth):
+        self._depth = depth
         self._number_of_pegs = int(depth * (depth + 1) / 2)
         self._adjacency = _generate_plinko_adjacency(depth)
         self._left_probabilities = None
@@ -139,13 +139,15 @@ class Board:
         self._left_probabilities = peg_left_probabilities
         self._bucket_probabilities = bucket_probabilities
 
+    def get_bucket_indices(self):
+        return list(range(self._number_of_pegs, self._number_of_pegs + self._depth + 1))
+
     def visualize(self):
         pass
 
 if __name__ == '__main__':
     board = Board(3)
     system = board.resolve_to_system()
-    system.evaluate([.5 for _ in range(6)])
-    # errors on first propagation
-    system._evaluate_for_roots([.5 for _ in range(6)], {ix: .25 for ix in range(6, 10)})
-    left_peg_probabilities = system.solve({ix: .2 for ix in range(6, 10)})
+    bucket_indices = board.get_bucket_indices()
+    left_peg_probabilities = system.solve({ix: 1/len(bucket_indices) for ix in bucket_indices})
+    system.evaluate(left_peg_probabilities)
