@@ -7,5 +7,6 @@ This repository contains:
 
 My favorite pieces are:
 
-* [Tree learning](tree_learning/tree_learning_overview.pdf) - a hands on description of decision trees & ensemble methods like RandomForest & boosting
+* [Tree learning](tree_learning/tree_learning_overview.pdf): a hands on description of decision trees & ensemble methods like RandomForest & boosting
 * [The overlapped hyperrectangle problem](overlapped_hyperrectangles/overlapped_hyperrectangles.pdf)
+* [The uniform Plinko problem](uniform_plinko/description.md): generating an asymptotic uniform distribtion from Plinko boards
