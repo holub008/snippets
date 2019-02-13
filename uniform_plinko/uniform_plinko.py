@@ -1,5 +1,6 @@
 import numpy as np
 from scipy.optimize import minimize
+import svgwrite as svg
 
 
 def _generate_plinko_adjacency(depth):
@@ -73,7 +74,6 @@ class PlinkoSystem:
 
     def evaluate(self, probabilities):
         """
-
         :param probabilities: a list of left turn probabilities corresponding to each peg
         :return: a dict of bucket_index to
         """
@@ -107,7 +107,7 @@ class PlinkoSystem:
                                                   sum(x**2 for x in self._evaluate_for_roots(x, target_probabilities)),
                                                   starting_guesses,
                                                   bounds=bounds)
-        return left_peg_probability_solutions.x
+        return list(left_peg_probability_solutions.x)
 
 
 def _traverse(adjacency, current_path):
@@ -134,6 +134,9 @@ class Board:
         all_paths = _traverse(self._adjacency, Path((0,)))
         return PlinkoSystem(all_paths, self._number_of_pegs)
 
+    def get_number_of_pegs(self):
+        return self._number_of_pegs
+
     def set_probabilities(self, peg_left_probabilities, bucket_probabilities):
         self._left_probabilities = peg_left_probabilities
         self._bucket_probabilities = bucket_probabilities
@@ -141,12 +144,114 @@ class Board:
     def get_bucket_indices(self):
         return list(range(self._number_of_pegs, self._number_of_pegs + self._depth + 1))
 
-    def visualize(self):
-        pass
+    def render(self, file_path = '/Users/kholub/plinko.svg'):
+        def _pf(x):
+            return "%f%%" % (x,)
+
+        doc = svg.Drawing(filename=file_path, size=("100%", "100%"))
+
+        bucket_indices = self.get_bucket_indices()
+        number_of_buckets = len(bucket_indices)
+        bucket_width = 100 / number_of_buckets
+
+        peg_horizontal_spacing = 100 / number_of_buckets
+        peg_vertical_spacing = 90 / self._depth
+        peg_radius = peg_vertical_spacing / 16
+
+        # render pegs
+        peg_index_to_center = {}
+        for level in range(self._depth):
+            vertical_offset = level * peg_vertical_spacing + .5 * peg_vertical_spacing
+            horizontal_offset_to_first = peg_horizontal_spacing * (number_of_buckets - level) / 2
+
+            for peg_count in range(level + 1):
+                horizontal_offset = horizontal_offset_to_first + peg_count * peg_horizontal_spacing
+                peg_ix = int(level * (level + 1) / 2) + peg_count
+                peg_index_to_center[peg_ix] = (horizontal_offset, vertical_offset)
+                doc.add(doc.circle(center=(_pf(horizontal_offset), _pf(vertical_offset)),
+                                                   r=_pf(peg_radius),
+                                                   stroke_width="1",
+                                                   stroke="black",
+                                                   fill="rgb(66, 206, 183)"))
+
+        # render buckets, including bucket probabilities
+        bucket_top = 90 + peg_radius - .25 * peg_vertical_spacing
+        for bucket_count, bucket_index in enumerate(bucket_indices):
+            bucket_left_position = max((1, bucket_count * bucket_width))
+            bucket_right_position = min((99, (bucket_count + 1) * bucket_width))
+            # left line
+            doc.add(doc.line(start=(_pf(bucket_left_position), _pf(bucket_top)),
+                             end=(_pf(bucket_left_position), _pf(100)),
+                             stroke="black",
+                             stroke_width="1"))
+            # right line
+            doc.add(doc.line(start=(_pf(bucket_right_position), _pf(bucket_top)),
+                             end=(_pf(bucket_right_position), _pf(100)),
+                             stroke="black",
+                             stroke_width="1"))
+
+            vertical_position = 95
+            peg_index_to_center[bucket_index] = ((bucket_right_position + bucket_left_position) / 2, 90)
+            # evaluated probability
+            if self._bucket_probabilities:
+                horizontal_position = (bucket_right_position + bucket_left_position) / 2 - bucket_width / 4
+                probability = self._bucket_probabilities[bucket_index]
+                doc.add(doc.text("%.1f%%" % (probability * 100),
+                                 insert=(_pf(horizontal_position), _pf(vertical_position)),
+                                 style="font-size:200%" if self._depth < 8 else "font-size:100%"))
+
+        # render edges between pegs, including transition probabilities
+        for from_peg_ix in range(self._number_of_pegs):
+            from_peg_center = peg_index_to_center[from_peg_ix]
+            traversable_peg_indices = np.nonzero(self._adjacency[from_peg_ix,])[0]
+
+            left_peg_ix = traversable_peg_indices[0]
+            left_peg_center = peg_index_to_center[left_peg_ix]
+
+            right_peg_ix = traversable_peg_indices[1]
+            right_peg_center = peg_index_to_center[right_peg_ix]
+
+            doc.add(doc.line(start=(_pf(from_peg_center[0] - peg_radius), _pf(from_peg_center[1] + peg_radius)),
+                             end=(_pf(left_peg_center[0] + peg_radius), _pf(left_peg_center[1] - peg_radius)),
+                             stroke="black",
+                             stroke_width="1"))
+
+            doc.add(doc.line(start=(_pf(from_peg_center[0] + peg_radius), _pf(from_peg_center[1] + peg_radius)),
+                             end=(_pf(right_peg_center[0] - peg_radius), _pf(right_peg_center[1] - peg_radius)),
+                             stroke="black",
+                             stroke_width="1"))
+
+            if self._left_probabilities:
+                left_peg_probability = self._left_probabilities[from_peg_ix]
+                right_peg_probability = 1 - left_peg_probability
+
+                """
+                left_p_center = (_pf((left_peg_center[0] + from_peg_center[0]) / 2),
+                                 _pf((left_peg_center[1] + from_peg_center[1]) / 2))
+                doc.add(doc.text("%.2f" % left_peg_probability,
+                                 insert=left_p_center))
+                """
+
+                right_p_center = (_pf((right_peg_center[0] + from_peg_center[0]) / 2),
+                                 _pf((right_peg_center[1] + from_peg_center[1]) / 2))
+                doc.add(doc.text("%.2f" % right_peg_probability,
+                                 insert=right_p_center))
+
+        doc.save()
 
 if __name__ == '__main__':
-    board = Board(4)
+    board = Board(6)
     system = board.resolve_to_system()
     bucket_indices = board.get_bucket_indices()
-    left_peg_probabilities = system.solve({ix: 1/len(bucket_indices) for ix in bucket_indices})
-    system.evaluate(left_peg_probabilities)
+    peg_left_probabilities = system.solve({ix: 1/len(bucket_indices) for ix in bucket_indices})
+    bucket_probabilities = system.evaluate(peg_left_probabilities)
+
+    board.set_probabilities(peg_left_probabilities, bucket_probabilities)
+    board.render()
+
+    normal_board = Board(10)
+    normal_system = normal_board.resolve_to_system()
+    iid_split_probs = [.5 for _ in range(normal_board.get_number_of_pegs())]
+    normal_bucket_probs = normal_system.evaluate(iid_split_probs)
+    normal_board.set_probabilities(None, normal_bucket_probs)
+    normal_board.render()
