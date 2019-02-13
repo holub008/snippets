@@ -111,8 +111,10 @@ parameters.
 
 ## Solutions
 Solutions are rendered with right fall probabilities only; left fall
-probabilities are simply derived as the complement. To reproduce these
-results and graphics see [uniform_plink.py](./uniform_plinko.py).
+probabilities are simply derived as the complement. Note that the 
+solutions are rounded to two decimal places for clean rendering. To 
+reproduce these results and graphics see 
+[uniform_plink.py](./uniform_plinko.py).
 
 ### Depth 3
 <img src="./static/plinko_solution_3.svg" width="100%" height="500px"/>
