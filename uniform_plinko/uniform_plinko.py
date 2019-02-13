@@ -240,7 +240,7 @@ class Board:
         doc.save()
 
 if __name__ == '__main__':
-    board = Board(6)
+    board = Board(10)
     system = board.resolve_to_system()
     bucket_indices = board.get_bucket_indices()
     peg_left_probabilities = system.solve({ix: 1/len(bucket_indices) for ix in bucket_indices})
