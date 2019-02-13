@@ -53,7 +53,7 @@ trials).
 Here's the asymptotic break out of bucket outcomes for a constrained
 depth 10 Plinko board under 50/50 splits:
 
-![plinko_50_50](./static/plinko_5050_depth10.svg =500)
+<img src="./static/plinko_5050_depth10.svg" width="100%" height="500px"/>
 
 And a more visual distribution:
 
@@ -115,13 +115,13 @@ probabilities are simply derived as the complement. To reproduce these
 results and graphics see [uniform_plink.py](./uniform_plinko.py).
 
 ### Depth 3
-![depth_3](./static/plinko_solution_3.svg =500)
+<img src="./static/plinko_solution_3.svg" width="100%" height="500px"/>
 
 ### Depth 5
-![depth_5](./static/plinko_solution_5.svg =500)
+<img src="./static/plinko_solution_5.svg" width="100%" height="500px"/>
 
 ### Depth 10
 Using the above python code, this solution took around 10 seconds to
 compute.
 
-![depth_10](./static/plinko_solution_10.svg =500)
+<img src="./static/plinko_solution_10.svg" width="100%" height="500px"/>
