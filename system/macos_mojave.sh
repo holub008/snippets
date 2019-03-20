@@ -13,7 +13,7 @@ echo "Host *
   IdentityFile ~/.ssh/id_rsa" >> ~/.ssh/config
 ssh-add -K ~/.ssh/id_rsa
 
-echo "alias ls='ls -al'"" >> ~/.bash_profile
+echo "alias ls='ls -al'" >> ~/.bash_profile
 
 /usr/bin/ruby -e "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/master/install)"
 
