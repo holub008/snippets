@@ -77,6 +77,8 @@ brew cask install java
 brew install maven
 brew install pkg-config
 softwareupdate --install -a
+# sets up headers that some R (and possibly python) packages will need
+sudo installer -pkg /Library/Developer/CommandLineTools/Packages/macOS_SDK_headers_for_macOS_10.14.pkg -target /
 # may need a reboot after this
 
 # Rstudio installed from binary here: https://www.rstudio.com/products/rstudio/download/#download
@@ -85,6 +87,10 @@ softwareupdate --install -a
 # intellij installed from binary here: https://www.jetbrains.com/idea/download/#section=mac
 # launcher script is at: /usr/local/bin/idea
 
+# a bunch of globally installed R packages that are useful for EDA & modeling 
+# may run into issues with tidyverse installation if lib-xml / xcode is out of date or otherwise funky
+R -e "install.packages(c('tidyverse', 'tidyr', 'fuzzyjoin', 'ggplot2', 'devtools', 'xgboost', 'glmnet', 'keras', 'RPostgreSQL'), repos='http://cran.us.r-project.org')"
+
 # a few (public) personal projects
 git clone git@github.com:holub008/nymph.git
 git clone git@github.com:holub008/birkielo.git
@@ -92,9 +98,9 @@ git clone git@github.com:holub008/xrf.git
 git clone git@github.com:holub008/xgboost_jvm_scoring.git
 git clone git@github.com:holub008/snippets.git
 
-# a bunch of globally installed R packages that are useful for EDA & modeling 
-# may run into issues with tidyverse installation if lib-xml / xcode is out of date or otherwise funky
-R -e "install.packages(c('tidyverse', 'tidyr', 'fuzzyjoin', 'ggplot2', 'devtools', 'xgboost', 'glmnet', 'keras', 'RPostgreSQL'), repos='http://cran.us.r-project.org')"
-
+(cd birkielo && npm install --prefix server) && (cd birkielo && npm install --prefix client)
+# pycharm is such a beautiful tool that it will actually find the virtualenv created here and set it as the project interpretter by default
+(cd birkielo/offline && pipenv install)
+# these will be installed globally on the system
 R -e "devtools::install_git('https://github.com/holub008/xrf')" && R -e "devtools::install_git('https://github.com/holub008/nymph')"
 
