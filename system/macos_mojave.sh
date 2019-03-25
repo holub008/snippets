@@ -49,6 +49,7 @@ brew cask install sublime-text
 brew install python
 echo "alias python='python3'" >> ~/.bash_profile
 brew install pipenv
+echo "export PIPENV_VENV_IN_PROJECT=1" >> ~/.bash_profile
 brew install postgresql
 # postgresql had the following caveats:
 ==> icu4c
