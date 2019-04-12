@@ -1,0 +1,88 @@
+---
+title: "Almetrics Valence Analysis"
+author: "Karl Holub <karl.holub@nested-knowledge.com>"
+date: "4/10/2019"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+Sys.setenv(crossref_email='karljholub@gmail.com')
+```
+
+## Thank you Altmetric (TM) (R) (C)
+![Almetric Logo](static/altmetric_tm_r_c.png)
+[As requested by Altmetric.com](http://api.altmetric.com/index.html#attribution) for any consumer of their data, I am prominently featuring Altmetric.com branding on this document. They are "a research metrics company who track and collect the online conversations around millions of scholarly outputs". You can learn more about their attention score [here](https://www.altmetric.com/about-our-data/the-donut-and-score/) and some of its computational details [here](https://help.altmetric.com/support/solutions/articles/6000060969-how-is-the-altmetric-score-calculated-) (note that a tweet is worth four Facebook posts -- take that Zuckerberg!).
+
+## About
+Almetrics are a measurement of proliferation of scholarly works in online environments. These environments include social media, professional and educational platforms, and policy documents. These relatively informal environments stand in contrast to peer-reviewed publication and citation, used to compute impact factor (IF) and traditionally held as a proxy to research quality.
+
+Altmetric [clearly states](https://help.altmetric.com/support/solutions/articles/6000137149-guide-for-describing-altmetric-data) that their score measures attention and specifically does not attempt to proxy impact. [Cassidy Sugimoto hypothesizes](https://www.wiley.com/network/researchers/promoting-your-article/attention-is-not-impact-and-other-challenges-for-altmetrics) that "the nature of this attention is something much more complex and far less understood" compared to impact as measured by citation counts. In other words, the linkage between citation count in peer-reviewed journals and impact is much more direct than mentions in open sources and impact. This can, for example, be attributed to non-experts weighing in online (which of isn't necessarily a bad thing, just suggests higher false positive rate) or a wider audience on online channels for possible "fluke" virality.
+
+I find the ambiguation plausible and useful, but I am also doubtful that consumers of bibliometrics will utilize them for different purpose. It is too tempting to simplify and interpret them as similar measures of research quality. Indeed, [prior research](https://journals.plos.org/plosone/article?id=10.1371/journal.pone.0064841) found Altmetric Attention Score and citation count to be correlated.
+
+### Objective
+If the Altmetric Attention Score is to be regarded similarly to Impact Factor, we should understand its operation and failure modes. 
+
+In print publication "click bait" titles are summarizations or headlines designed to catch attention and stir controversy. With this method, publishers are hoping to drive traffic to their content (e.g. for ad revenues). Could a similar phenomenon exist in academic publication? *That is, could research with a flashy, polarizing, or controversial title drive increased online attention relative to similar content research with a more mild title?* The causal mechanisms include:
+
+* the internet exposes a high volume of information; most people don't have time to ingest it all, so a title may be all a browser uses to make a determination about the study.
+* the internet, and particularly social media, is largely used for entertainment purposes. Users may seek only to share or mention content that is flashy or controversial, resulting in title bias.
+* non-experts are the audience on the wider internet; they may not have a good sense of what is realistic or standard in a field.
+
+Implicit to this hypothesis is that IF doesn't suffer a similar title bias; unfortunately, at time of writing, I don't have IF data to perform this analysis.
+
+## The Data
+Two sources were used to pull data - one for random sampling of studies and another for obtaining Attention Scores for the sample.
+
+### Crossref API
+Crossref is a DOI authority and houses pointers to 90 million + digital objects. There may be some bias by virtue of what journals submit for DOI assignment using Crossref. We will ignore this potential bias. The [Crossref API](https://github.com/CrossRef/rest-api-doc) and [rcrossref](https://github.com/ropensci/rcrossref) can be used to fetch data.
+
+```{r}
+# we only consider published after 2014 before 2018, so that the article exists in Altmetric's timeline and allow time for online mentions to build
+sampled_dois_deep <- lapply(1:2, function(x) { cr_r(sample=100,
+                                       filters=c(until_created_date = '2018-01-01', from_created_date='2014-01-01'))})
+
+sampled_dois <- unlist(sampled_dois_deep)
+```
+Note that the the Crossref API cannot be seeded, so the sample used to generate this document was fixed and checked into version control.
+
+### Almetric API
+Almetric exposes their attention score in a publically available API, keyed by DOI. Using the random sample of DOIs obtained from Crossref, we will gather attention scores.
+
+```{r}
+# note we sleep a scecond to play nicely with Altmetric's API 
+json_dumps <- sapply(sampled_dois, function(doi) {
+  Sys.sleep(1)
+  getURL(paste0('https://api.altmetric.com/v1/doi/', doi))
+})
+
+json_dumps_with_score <- json_dumps[json_dumps != 'Not Found']
+parsed_json <- lapply(json_dumps_with_score, fromJSON) %>%
+  lapply(function(s) { list(
+    
+  )})
+studies <- do.call(rbind, parsed_json)
+```
+
+## Methods
+
+### Text Parsing
+
+### Sentiment Analysis
+
+#### Valence
+
+#### Naive Unigrams 
+
+#### Context Aware Unigrams - Valence Shifters 
+
+## Results
+
+### Visualizing and Understanding the Sample
+https://github.com/mjockers/syuzhet
+
+### Correlating Valence and Attention Score 
+
+
+## Conclusion
+Quoting Sugimoto again, "Altmetrics should be harnessed not to replace any existing metrics, but rather to expand the tools available to demonstrate the diffusion of science."
