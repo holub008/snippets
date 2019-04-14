@@ -1,5 +1,5 @@
 ---
-title: "Almetrics Valence Analysis"
+title: "Almetrics Polaroty Analysis"
 author: "Karl Holub <karl.holub@nested-knowledge.com>"
 date: "4/10/2019"
 output: html_document
@@ -7,6 +7,8 @@ output: html_document
 
 ```{r setup, include=FALSE}
 Sys.setenv(crossref_email='karljholub@gmail.com')
+studies <- read.csv('./static/studies.csv')
+sampled_dois <- readLines(file('./static/sampled_dois.txt'))
 ```
 
 ## Thank you Altmetric (TM) (R) (C)
@@ -35,53 +37,160 @@ Implicit to this hypothesis is that IF doesn't suffer a similar title bias; unfo
 Two sources were used to pull data - one for random sampling of studies and another for obtaining Attention Scores for the sample.
 
 ### Crossref API
-Crossref is a DOI authority and houses pointers to 90 million + digital objects. There may be some bias by virtue of what journals submit for DOI assignment using Crossref. We will ignore this potential bias. The [Crossref API](https://github.com/CrossRef/rest-api-doc) and [rcrossref](https://github.com/ropensci/rcrossref) can be used to fetch data.
+Crossref is a DOI authority and houses pointers to 90 million + digital objects. There may be some bias by virtue of what journals submit for DOI assignment using Crossref. We will ignore this potential bias. The [Crossref API](https://github.com/CrossRef/rest-api-doc) and [rcrossref](https://github.com/ropensci/rcrossref) can be used to fetch randomly hosted DOIs in the Crossref database.
 
-```{r}
+```{r eval=FALSE}
 # we only consider published after 2014 before 2018, so that the article exists in Altmetric's timeline and allow time for online mentions to build
-sampled_dois_deep <- lapply(1:2, function(x) { cr_r(sample=100,
+sampled_dois_deep <- lapply(1:5000, function(x) { 
+                                      if (x %% 100 == 0) {
+                                        print(paste0('On iteration: ', x))
+                                      }
+                                      Sys.sleep(.1)
+                                      cr_r(sample=100,
                                        filters=c(until_created_date = '2018-01-01', from_created_date='2014-01-01'))})
 
-sampled_dois <- unlist(sampled_dois_deep)
+sampled_dois <- sampled_dois_deep %>%
+  unlist() %>%
+  unique() # some of the sample may be duplicate, given that there are only 90M DOIs on Crossref
+writeLines(sampled_dois, file('./static/sampled_dois.txt'))
 ```
-Note that the the Crossref API cannot be seeded, so the sample used to generate this document was fixed and checked into version control.
 
 ### Almetric API
 Almetric exposes their attention score in a publically available API, keyed by DOI. Using the random sample of DOIs obtained from Crossref, we will gather attention scores.
-
-```{r}
+```{r eval=FALSE}
 # note we sleep a scecond to play nicely with Altmetric's API 
-json_dumps <- sapply(sampled_dois, function(doi) {
+json_dumps <- sapply(sampled_dois[1:10000], function(doi) {
   Sys.sleep(1)
   getURL(paste0('https://api.altmetric.com/v1/doi/', doi))
 })
 
+# since not all DOIs are academic works, and some academic works are not listed on Altmetric
 json_dumps_with_score <- json_dumps[json_dumps != 'Not Found']
-parsed_json <- lapply(json_dumps_with_score, fromJSON) %>%
+parsed_json <- sapply(json_dumps_with_score, fromJSON) %>%
+  unname() %>%
   lapply(function(s) { list(
-    
-  )})
-studies <- do.call(rbind, parsed_json)
+    doi = s$doi,
+    title = s$title[[1]],
+    journal = s$journal,
+    last_updated_epoch = s$last_updated,
+    publisher_field = s$publisher_subjects$name[1],
+    paper_field = s$scopus_subjects[1],
+    attention_score = s$score)})
+
+studies <- do.call(rbind, parsed_json) %>% as.data.frame()
+# R is goofy in NULL handling in dataframes, so we swap out NAs and coerce to columns to vectors
+for (col in colnames(studies)) { 
+  studies[[col]] <- sapply(studies[[col]], function(x) {
+    if (is.null(x)) {
+      return(NA)
+    }
+    return(x)
+  })
+}
+write.table(studies, './static/studies.csv', row.names = FALSE, col.names = TRUE, sep=',')
 ```
+Note that the the Crossref API cannot be seeded and Altmetric is mutable and takes days to extract data from, so the sample used to generate this document was fixed and checked into version control.
 
 ## Methods
+Text parsing and sentiment analysis is primarily done using the [sentimentr library](https://github.com/trinker/sentimentr) which uses 
 
-### Text Parsing
+### Text Refinement
+Titles were parsed with the following approach:
+
+* Break the title into words using whitespace
+* Throw away non-pause punctuation
 
 ### Sentiment Analysis
+We are interested in assessing the *polarity* of text. Polarity is a measurement of the positive or negative emotion text conveys. It is hypothesized that the magnitude of polarity (in either the positive or negative direction) is a good proxy for how controversial, flashy, or dramatized a title is.
 
-#### Valence
+There is a diversity of methods for assessing polarity. None of these are certifiably "right" due to the unsupervised nature of the problem. Two approaches are considered.
 
-#### Naive Unigrams 
+#### Absolute Polarity
+Most methods of polarity analysis are based on a pre-built dictionary of words and an associated polarity score. For example, [Matthew Jocker's](https://github.com/mjockers/syuzhet) `syuzhet` dictionary looks like:
 
-#### Context Aware Unigrams - Valence Shifters 
+```{r}
+set.seed(55455)
+sample_n(syuzhet::get_sentiment_dictionary(), 10)
+```
+"infiltrated" and "enslaves" carry highly *negative* connotations in common usage and have low scores; "renovate" and "enhanced" carry *positive* connotations and have positive scores. 
+
+Using such a dictionary, a simple method to assess polarity of a title is to:
+
+* Lookup the score for each word in a title
+    * throw away words not in the polarity dictionary
+* Sum up the scores for each title
+    * in our case, the absolute value of scores are summed
+* Normalize by the number of words in the title
+  
+The choice to sum aboslute scores is to capture general strength of language. For example, the phrase "Pandas are happily teetering on the edge of a peaceful extinction" is fairly balanced (happily/peaceful cancelling out teetering/extinction) while overall using fairly colorful, polarizing language.
+
+#### Whole Title Polarity
+The "augmented dictionary method" of `sentimentr` is a "context aware" version of the above. It considers the context (surrounding 2-5 words) as "valence shifters" in its assessment of polarity. Valence shifters can be:
+
+* Word amplifiers: "extremely" or "very" which should increase the score of a word
+    * Additionally, de-amplifiers such as "hardly" and "minimally" decrease the score of a word.
+* Negators: "not", "less" which invert the polarity of a word 
+* And more
+
+This strategy is used to produce a per-title score
 
 ## Results
 
-### Visualizing and Understanding the Sample
-https://github.com/mjockers/syuzhet
+```{r}
+dictionary <- syuzhet::get_sentiment_dictionary()
 
-### Correlating Valence and Attention Score 
+score_joined_individual_words <- studies %>%
+  select(doi, title) %>%
+  tidytext::unnest_tokens(word, title) %>%
+  anti_join(tidytext::get_stopwords('en'), by = 'word') %>%
+  inner_join(dictionary, by = 'word')
+
+doi_to_sap <- score_joined_individual_words %>%
+  group_by(doi) %>%
+  summarize(
+    sap = mean(abs(value))
+  )
+
+titles <- as.list(studies$title)
+class(titles) <- c('list', 'get_sentences', 'get_sentences_character')
+doi_to_wtp <- studies %>% select(doi)
+doi_to_wtp$wtp <- abs(sentimentr::sentiment(titles)$sentiment)
+
+score_joined_studies <- studies %>%
+  left_join(doi_to_sap, by = 'doi') %>%
+  left_join(doi_to_wtp, by = 'doi') %>%
+  select(doi, title, attention_score, paper_field, sap, wtp)
+
+score_joined_studies %>% arrange(-sap) %>% head()
+
+with(score_joined_studies %>% filter(!is.na(sap)), cor(sap, attention_score, method = 'spearman'))
+with(score_joined_studies %>% filter(!is.na(wtp)), cor(wtp, attention_score, method = 'spearman'))
+with(score_joined_studies %>% filter(!is.na(wtp) & !is.na(sap)), cor(wtp, sap, method = 'spearman'))
+
+
+# since it's likely that different fields have different magnitudes of online attention
+score_joined_studies %>% 
+  filter(!is.na(wtp)) %>%
+  group_by(paper_field) %>%
+  filter(n() > 50) %>%
+  summarize(
+    correlation = cor(wtp, attention_score, method = 'spearman'),
+    papers = n()
+  )
+
+score_joined_studies %>% 
+  filter(!is.na(sap)) %>%
+  group_by(paper_field) %>%
+  filter(n() > 50) %>%
+  summarize(
+    correlation = cor(sap, attention_score, method = 'spearman'),
+    papers = n()
+  )
+```
+
+### Visualizing and Understanding the Sample
+
+### Correlating Polarity and Attention Score 
 
 
 ## Conclusion
