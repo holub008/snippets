@@ -105,3 +105,4 @@ git clone git@github.com:holub008/snippets.git
 # these will be installed globally on the system
 R -e "devtools::install_git('https://github.com/holub008/xrf')" && R -e "devtools::install_git('https://github.com/holub008/nymph')"
 
+echo "alias pip='pip3'" >> ~/.bash_profile
