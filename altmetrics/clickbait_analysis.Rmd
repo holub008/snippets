@@ -62,12 +62,13 @@ Almetric exposes their attention score in a publically available API, keyed by D
 # loop instead of vectorized so that intermediate results aren't lost.
 json_dumps <- c()
 total_requests <- 1
-for (doi in sampled_dois) {
+for (doi in sampled_dois[63256:length(sampled_dois)]) {
   Sys.sleep(1)
   if (total_requests %% 10000 == 0) {
       writeLines(json_dumps, file('./static/raw_json_save.txt'))
   }
   json_dumps <- c(json_dumps, getURL(paste0('https://api.altmetric.com/v1/doi/', doi)))
+  total_requests <- total_requests + 1
 }
 
 # since not all DOIs are academic works, and some academic works are not listed on Altmetric
