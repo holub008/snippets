@@ -58,11 +58,18 @@ writeLines(sampled_dois, file('./static/sampled_dois.txt'))
 ### Almetric API
 Almetric exposes their attention score in a publically available API, keyed by DOI. Using the random sample of DOIs obtained from Crossref, we will gather attention scores.
 ```{r eval=FALSE}
-# note we sleep a scecond to play nicely with Altmetric's API 
-json_dumps <- sapply(sampled_dois[1:10000], function(doi) {
+# sleep a scecond to play nicely with Altmetric's API 
+# loop instead of vectorized so that intermediate results aren't lost.
+json_dumps <- c()
+total_requests <- 1
+for (doi in sampled_dois[63256:length(sampled_dois)]) {
   Sys.sleep(1)
-  getURL(paste0('https://api.altmetric.com/v1/doi/', doi))
-})
+  if (total_requests %% 10000 == 0) {
+      writeLines(json_dumps, file('./static/raw_json_save.txt'))
+  }
+  json_dumps <- c(json_dumps, getURL(paste0('https://api.altmetric.com/v1/doi/', doi)))
+  total_requests <- total_requests + 1
+}
 
 # since not all DOIs are academic works, and some academic works are not listed on Altmetric
 json_dumps_with_score <- json_dumps[json_dumps != 'Not Found']
@@ -166,7 +173,6 @@ score_joined_studies %>% arrange(-sap) %>% head()
 with(score_joined_studies %>% filter(!is.na(sap)), cor(sap, attention_score, method = 'spearman'))
 with(score_joined_studies %>% filter(!is.na(wtp)), cor(wtp, attention_score, method = 'spearman'))
 with(score_joined_studies %>% filter(!is.na(wtp) & !is.na(sap)), cor(wtp, sap, method = 'spearman'))
-
 
 # since it's likely that different fields have different magnitudes of online attention
 score_joined_studies %>% 
