@@ -1,0 +1,209 @@
+---
+title: "PTCAS Observation Hours"
+author:
+- Karl Holub <karl.holub@nested-knowledge.com>
+- Molly Watkins <mwatkins2@css.edu>
+output:
+  html_document:
+    df_print: paged
+---
+```{r setup, include=FALSE, echo=FALSE}
+library(readxl)
+library(dplyr)
+library(readxl)
+library(ggplot2)
+library(maptools)
+library(maps)
+library(nymph) # install via: devtools::install_git('https://github.com/holub008/nymph')
+
+parse_coords <- function(coords) {
+  # all schools are in US, so we safely assume N latitude, W longitude
+  # anything else will NA
+  # TODO the conditionals allow for some human error & could be removed once that is fixed
+  matches <- regmatches(coords, regexec("([0-9]+\\.[0-9]+) ?° N,? ([0-9]+\\.[0-9]+)° W", coords))
+  lapply(matches, function(x){list(Latitude=as.numeric(x[2]), Longitude=-as.numeric(x[3]))}) %>%
+    bind_rows()
+}
+
+data <- read_excel('./observation_hours.xlsx')
+colnames(data) <- make.names(colnames(data))
+
+data <- data %>% filter(!is.na(GPS.Coordinates)) # a couple new programs that we choose not to include
+# TODO the coords for 193 seem incorrect, we ignore until corrected
+data <- data[-193,]
+data <- data %>% cbind(parse_coords(data$GPS.Coordinates)) %>%
+  select(Instituition, Category, Minimum.Hours, Recommended.Hours, Latitude, Longitude)
+
+categories <- data.frame(
+  id = 1:6,
+  Requirement.Category = c(
+    'PT hours are required--a licensed PT must verify with signed form uploaded or online via PTCAS',
+    'PT hours are required--no verification by a physical therapist',
+    'PT hours are not required but are highly recommended',
+    'PT hours are not required but are considered',
+    'PT hours are not required or considered',
+    'Other'
+  )
+)
+
+# TODO this drops a program which doesn't have a category currently
+oh_data <- data %>% 
+  inner_join(categories, by=c('Category' = 'id')) %>%
+  filter(Longitude < -50 & Latitude > 20) # TODO filtering these non-Americas for now
+```
+
+# About
+We are studying the question of how PT programs Observation hours are time that prospective PT school students
+
+# Dataset
+The dataset was sourced from the [PTCAS website](http://aptaapps.apta.org/ptcas/observationhours.aspx) (for requirements) & [Google Maps](https://google.com/maps) (for program locations). It has the following shape:
+```{r}
+dim(oh_data)
+```
+
+meaning there are 243 programs & 7 (really 6) descriptive columns. Previewing it:
+
+```{r}
+head(oh_data, n=10)
+```
+
+Outlining the non-trivial columns:
+
+* Category: The type of the requirement the institution has for observation hours
+* Minimum.Hours: The minimum number of observation hours required. May be missing if:
+    * The program doesn't require hours
+    * The program doesn't publish an explicit number, in favor of "case by case" consideration. Students should still expect to need to have some hours for acceptance.
+* Recommended.Hours: Optional and potentially different from minimum hours
+    * Some programs supply a range (e.g. "400-600"") or lower bounded range (e.g. "100+""). For this analysis, only the lower bound is used.
+* Latitude & Longitude: Approximate (hand selected on map) location of the center of the institution's campus
+
+
+# Summary Statistics
+
+## Requirement Category
+```{r}
+oh_data %>%
+  ggplot() +
+    geom_bar(aes(as.factor(Category))) +
+    theme(axis.text.x = element_text(angle = 90, hjust = 1)) +
+    xlab('Requirement Category') +
+    ylab('Number of Programs')
+```
+
+where the categories are:
+
+```{r}
+categories
+```
+
+83% of programs require observation hours.
+
+## Required Hours
+```{r}
+summary(oh_data$Minimum.Hours)
+```
+
+The distribution of hours across all programs looks like:
+
+```{r}
+oh_data %>%
+  filter(!is.na(Minimum.Hours)) %>%
+  ggplot() +
+    geom_histogram(aes(Minimum.Hours), bins = 15)
+```
+
+Peeking at distributions conditioned on the requirement category (specifically 1 & 2, which do impose a requirement):
+
+```{r}
+oh_data %>%
+  filter(!is.na(Minimum.Hours) & Category %in% c(1,2)) %>%
+  ggplot() +
+    geom_violin(aes(as.factor(Category), Minimum.Hours))
+  
+```
+
+The distributions are similar, with modes at 40 & 100 hours.
+
+# Incorporating Geography
+
+## Visualizing
+
+### Points
+First, we view each program as a point on the US map, where color indicates the hours requirement:
+```{r fig.width=20, fig.height=15}
+us <- map_data('state')
+
+gg <- oh_data %>%
+  ggplot()  +
+    geom_polygon(data = us, aes(x=long, y = lat, group = group), fill='grey', color='white') +
+  geom_point(aes(x=Longitude, y=Latitude, color = Minimum.Hours), size=15)
+
+gg
+```
+
+There is heavy concentration of programs in the Northeast US, so we zoom in:
+
+```{r fig.width=15, fig.height=15}
+gg + coord_cartesian(xlim = c(-79, -67), ylim = c(35, 47))
+```
+
+### Heatmap
+
+TODO: This isn't very pretty or effective, despite probably being the most important graph!
+```{r fig.width=15, fig.height=11}
+oh_data %>%
+  filter(!is.na(Minimum.Hours)) %>%
+  mutate(
+    Latitude = as.integer(Latitude),
+    Longitude = as.integer(Longitude)
+  ) %>%
+ggplot() +
+  geom_tile(aes(x = Longitude, y = Latitude, fill = Minimum.Hours)) +
+  geom_polygon(data = us, aes(x=long, y = lat, group = group), alpha=0, color='black')
+```
+
+There certainly appears to be a trend of decreasing hour trends as Longitude increases (moving towards the East). There also appears to be pockets of high requirements in the "central" east, which might suggest a network analysis, or ranged interaction effects in latitude and longitude.
+
+## Correlations
+
+### Main Effect Lat/Long
+
+#### Visualizing
+To visualize main effect correlations, we look at marginal x/y plots of latitude and longitude. Smoothing splines are used to trend the data.
+
+```{r message=FALSE}
+oh_data %>%
+  filter(!is.na(Minimum.Hours)) %>%
+  ggplot(aes(Latitude, Minimum.Hours)) +
+    geom_point() +
+    geom_smooth()
+```
+
+Hours look pretty flat across Latitude, with perhaps a slight decrease moving North.
+
+```{r message=FALSE}
+oh_data %>%
+  filter(!is.na(Minimum.Hours)) %>%
+  ggplot(aes(Longitude, Minimum.Hours)) +
+    geom_point() +
+    geom_smooth()
+```
+There is a definite decrease in hours moving west to east, with a possible jump upwards at the coast.
+
+#### Inference (Non-zero Effects)
+
+To determine if the main effect correlations are non-zero, we perform a bootstrap on the correlation coefficients, building 95% intervals:
+
+```{r}
+bs <- bootstrap(oh_data %>% filter(!is.na(Minimum.Hours)), corr_lat = cor(Latitude, Minimum.Hours, method='spearman'), corr_long = cor(Longitude, Minimum.Hours, method='spearman'))
+
+summary.bootstrap(bs)
+```
+
+Matching our visual intuition, the Longitude correlation interval certainly does not include 0 (i.e. is a non-zero effect), while Latitude is less convincing (interval does include a 0 correlation). For future analyses, it is extremely likely that these two effects interact (e.g. due to high requirements in the Northeast US).
+
+### Spatial Auto Correlation
+TODO
+
+
+
