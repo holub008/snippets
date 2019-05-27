@@ -168,7 +168,7 @@ gg <- oh_data %>%
                                barwidth = 2, barheight = 20, 
                                title.theme=element_text(size=15), 
                                label.theme = element_text(size=20))) +
-    ggtitle('Required PTCAS Program Observation Hours By Geography') +
+    ggtitle('PTCAS Program Required Observation Hours') +
     theme(plot.title = element_text(size=30),
           axis.text=element_text(size=20),
           axis.title=element_text(size=20)) +
@@ -236,7 +236,7 @@ ggplot(points) +
                              title.theme=element_text(size=15), 
                              label.theme = element_text(size=20),
                              draw.ulim = FALSE, draw.llim = TRUE)) +
-  ggtitle('Required PTCAS Program Observation Hours By Geography') +
+  ggtitle('PTCAS Program Required Observation Hours By Geography') +
   theme(plot.title = element_text(size=30),
         axis.text=element_text(size=20),
         axis.title=element_text(size=20),
