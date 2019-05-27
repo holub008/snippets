@@ -14,23 +14,42 @@ library(readxl)
 library(ggplot2)
 library(maptools)
 library(maps)
+library(xrf)
 library(nymph) # install via: devtools::install_git('https://github.com/holub008/nymph')
+library(sp)
 
 parse_coords <- function(coords) {
   # all schools are in US, so we safely assume N latitude, W longitude
   # anything else will NA
-  # TODO the conditionals allow for some human error & could be removed once that is fixed
-  matches <- regmatches(coords, regexec("([0-9]+\\.[0-9]+) ?° N,? ([0-9]+\\.[0-9]+)° W", coords))
+  matches <- regmatches(coords, regexec("([0-9]+\\.[0-9]+)° N, ([0-9]+\\.[0-9]+)° W", coords))
   lapply(matches, function(x){list(Latitude=as.numeric(x[2]), Longitude=-as.numeric(x[3]))}) %>%
     bind_rows()
+}
+
+parse_recommended_hours <- function(hours) {
+  hours_lower <- tolower(hours)
+  hours_patterns <- c(
+    '([0-9]+)',
+    '([0-9]+) ?\\- ?[0-9]+',
+    'at least ([0-9]+)',
+    '([0-9]+) ?\\- ?[0-9]+ hours',
+    '([0-9]+) hours minimum',
+    '([0-9]+)\\+'
+  )
+  
+  parsed_hours <- rep(NA, length(hours))
+  for (match_ix in 1:length(hours_patterns)) {
+    matches <- regmatches(hours_lower, regexec(hours_patterns[match_ix], hours_lower))
+    matched_hours <- unlist(lapply(matches, function(x){as.numeric(x[2])}))
+    parsed_hours <- ifelse(is.na(parsed_hours), matched_hours, parsed_hours)
+  }
+
+  parsed_hours
 }
 
 data <- read_excel('./observation_hours.xlsx')
 colnames(data) <- make.names(colnames(data))
 
-data <- data %>% filter(!is.na(GPS.Coordinates)) # a couple new programs that we choose not to include
-# TODO the coords for 193 seem incorrect, we ignore until corrected
-data <- data[-193,]
 data <- data %>% cbind(parse_coords(data$GPS.Coordinates)) %>%
   select(Instituition, Category, Minimum.Hours, Recommended.Hours, Latitude, Longitude)
 
@@ -49,11 +68,17 @@ categories <- data.frame(
 # TODO this drops a program which doesn't have a category currently
 oh_data <- data %>% 
   inner_join(categories, by=c('Category' = 'id')) %>%
-  filter(Longitude < -50 & Latitude > 20) # TODO filtering these non-Americas for now
+  filter(Longitude < -50 & Latitude > 20) %>% # TODO filtering these non-Americas for now
+  mutate(
+    Recommended.Hours = parse_recommended_hours(Recommended.Hours)
+  ) %>%
+  mutate(
+    Minimum.Hours.Imputed = ifelse(is.na(Minimum.Hours) | Minimum.Hours == 0, Recommended.Hours, Minimum.Hours)
+  )
 ```
 
 # About
-We are studying the question of how PT programs Observation hours are time that prospective PT school students
+We are studying the question of how PT programs' observation hours for prospective students vary with location. This is inclusive 
 
 # Dataset
 The dataset was sourced from the [PTCAS website](http://aptaapps.apta.org/ptcas/observationhours.aspx) (for requirements) & [Google Maps](https://google.com/maps) (for program locations). It has the following shape:
@@ -119,7 +144,6 @@ oh_data %>%
   filter(!is.na(Minimum.Hours) & Category %in% c(1,2)) %>%
   ggplot() +
     geom_violin(aes(as.factor(Category), Minimum.Hours))
-  
 ```
 
 The distributions are similar, with modes at 40 & 100 hours.
@@ -132,11 +156,33 @@ The distributions are similar, with modes at 40 & 100 hours.
 First, we view each program as a point on the US map, where color indicates the hours requirement:
 ```{r fig.width=20, fig.height=15}
 us <- map_data('state')
+usa <- map_data('usa') %>%
+  filter(region == 'main')
 
 gg <- oh_data %>%
   ggplot()  +
     geom_polygon(data = us, aes(x=long, y = lat, group = group), fill='grey', color='white') +
-  geom_point(aes(x=Longitude, y=Latitude, color = Minimum.Hours), size=15)
+    geom_point(aes(x=Longitude, y=Latitude, color = Minimum.Hours.Imputed), size=10) + 
+    scale_color_distiller(palette=1, direction=1) + 
+    guides(color=guide_colorbar(title='Required Hours',
+                               barwidth = 2, barheight = 20, 
+                               title.theme=element_text(size=15), 
+                               label.theme = element_text(size=20))) +
+    ggtitle('Required PTCAS Program Observation Hours By Geography') +
+    theme(plot.title = element_text(size=30),
+          axis.text=element_text(size=20),
+          axis.title=element_text(size=20)) +
+  xlab('Longitude') +
+  ylab('Latitude') +
+    theme(plot.title = element_text(size=30),
+        axis.text=element_text(size=20),
+        axis.title=element_text(size=20),
+        axis.line=element_blank(),axis.text.x=element_blank(),
+        axis.text.y=element_blank(),axis.ticks=element_blank(),
+        axis.title.x=element_blank(),
+        axis.title.y=element_blank(),
+        panel.background=element_blank(),panel.border=element_blank(),panel.grid.major=element_blank(),
+        panel.grid.minor=element_blank(),plot.background=element_blank())
 
 gg
 ```
@@ -148,21 +194,62 @@ gg + coord_cartesian(xlim = c(-79, -67), ylim = c(35, 47))
 ```
 
 ### Heatmap
+To build a more interprettable visual, we need to:
 
-TODO: This isn't very pretty or effective, despite probably being the most important graph!
+* Populate dead space by imputing expected number of required hours (modeling)
+* Capture trends
+* Capture pockets
+
+RuleFit is a model fitting procedure that identifies "similar" hyperrectangles (2D rectangles, in our case) in the data. Regularization (LASSO) & cross validation are used to fit the model. The final model is selected using the cross validation error minimizing regularization parameter; this is more aggressive (i.e. higher false positive rate) than using the regularization parameter within a standard error of the minimum.
+
 ```{r fig.width=15, fig.height=11}
-oh_data %>%
-  filter(!is.na(Minimum.Hours)) %>%
-  mutate(
-    Latitude = as.integer(Latitude),
-    Longitude = as.integer(Longitude)
-  ) %>%
-ggplot() +
-  geom_tile(aes(x = Longitude, y = Latitude, fill = Minimum.Hours)) +
-  geom_polygon(data = us, aes(x=long, y = lat, group = group), alpha=0, color='black')
+train_data <- oh_data %>%
+  filter(!is.na(Minimum.Hours.Imputed))
+model <- xrf(Minimum.Hours.Imputed ~ Latitude + Longitude, 
+             train_data, 
+             family = 'gaussian',
+             xgb_control = list(nrounds = 5, max_depth = 2),
+             deoverlap = TRUE)
+
+box <- us %>%
+  summarize(
+    min_lat = min(lat),
+    max_lat = max(lat),
+    min_long = min(long),
+    max_long = max(long)
+  )
+points <- expand.grid(
+  Latitude = seq(box$min_lat, box$max_lat, by = .1),
+  Longitude = seq(box$min_long, box$max_long, by = .1),
+  Minimum.Hours.Imputed = -1 # https://github.com/holub008/xrf/issues/9
+) %>%
+  filter(point.in.polygon(Longitude, Latitude, usa$long, usa$lat) > 0)
+
+points$ehours <- predict(model, points , lambda = 'lambda.min')[,1]
+
+ggplot(points) +
+  geom_raster(aes(x = Longitude, y = Latitude, fill = ehours), interpolate = TRUE) +
+  geom_polygon(data = us, aes(x=long, y = lat, group = group), fill=NA, color='black') + 
+  scale_fill_distiller(palette=1, direction=1) + 
+  guides(fill=guide_colorbar(title='Required Hours',
+                             barwidth = 2, barheight = 20, 
+                             title.theme=element_text(size=15), 
+                             label.theme = element_text(size=20),
+                             draw.ulim = FALSE, draw.llim = TRUE)) +
+  ggtitle('Required PTCAS Program Observation Hours By Geography') +
+  theme(plot.title = element_text(size=30),
+        axis.text=element_text(size=20),
+        axis.title=element_text(size=20),
+        axis.line=element_blank(),axis.text.x=element_blank(),
+        axis.text.y=element_blank(),axis.ticks=element_blank(),
+        axis.title.x=element_blank(),
+        axis.title.y=element_blank(),
+        panel.background=element_blank(),panel.border=element_blank(),panel.grid.major=element_blank(),
+        panel.grid.minor=element_blank(),plot.background=element_blank())
+
 ```
 
-There certainly appears to be a trend of decreasing hour trends as Longitude increases (moving towards the East). There also appears to be pockets of high requirements in the "central" east, which might suggest a network analysis, or ranged interaction effects in latitude and longitude.
+There certainly appears to be a trend of decreasing hours as Longitude increases (moving towards the East). There appears to be pockets of (regionally) high requirements in the LA area & the "central" east coast, while New England is a pocket of particularly low requirements.
 
 ## Correlations
 
@@ -173,8 +260,8 @@ To visualize main effect correlations, we look at marginal x/y plots of latitude
 
 ```{r message=FALSE}
 oh_data %>%
-  filter(!is.na(Minimum.Hours)) %>%
-  ggplot(aes(Latitude, Minimum.Hours)) +
+  filter(!is.na(Minimum.Hours.Imputed)) %>%
+  ggplot(aes(Latitude, Minimum.Hours.Imputed)) +
     geom_point() +
     geom_smooth()
 ```
@@ -183,8 +270,8 @@ Hours look pretty flat across Latitude, with perhaps a slight decrease moving No
 
 ```{r message=FALSE}
 oh_data %>%
-  filter(!is.na(Minimum.Hours)) %>%
-  ggplot(aes(Longitude, Minimum.Hours)) +
+  filter(!is.na(Minimum.Hours.Imputed)) %>%
+  ggplot(aes(Longitude, Minimum.Hours.Imputed)) +
     geom_point() +
     geom_smooth()
 ```
