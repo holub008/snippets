@@ -37,7 +37,6 @@ def get_text_for_title(url):
         return None
 
     download_link = HOST + download_a['href']
-
     dl_resp = requests.get(download_link, headers=HEADERS)
 
     return dl_resp.text
@@ -62,9 +61,29 @@ if __name__ == "__main__":
     with open('./transcripts.txt', 'w') as f:
         f.writelines(all_transcripts)
 
+    # with open('./all_transcripts.txt', 'r') as f:
+    #    all_transcripts = f.readlines()
+
     corpus = '\n'.join(all_transcripts)
+    corpus = corpus.replace("You can't download more then 50 subtitles per day!", "")
+    corpus = corpus.replace("(AUDIENCE LAUGHS)", "")
+    corpus = corpus.replace("(AUDIENCE LAUGHING)", "")
     words = nltk.word_tokenize(corpus)
 
     bigrams = Counter(list(nltk.ngrams(words, 2)))
     trigrams = Counter(list(nltk.ngrams(words, 3)))
+    quadgrams = Counter(list(nltk.ngrams(words, 4)))
+    quintgrams = Counter(list(nltk.ngrams(words, 5)))
+    sextgrams = Counter(list(nltk.ngrams(words, 6)))
+
+    sorted_tri = sorted(trigrams.items(), key=lambda kv: kv[1], reverse=True)
+    sorted_quad = sorted(quadgrams.items(), key=lambda kv: kv[1], reverse=True)
+    sorted_quint = sorted(quintgrams.items(), key=lambda kv: kv[1], reverse=True)
+    sorted_sext = sorted(quintgrams.items(), key=lambda kv: kv[1], reverse=True)
+
+    print('\n'.join([str(x[1]) + ": " + ' '.join(x[0]) for x in sorted_quint[1:100]]))
+    print('\n'.join([str(x[1]) + ": " + ' '.join(x[0]) for x in sorted_sext[1:100]]))
+    print('\n'.join([str(x[1]) + ": " + ' '.join(x[0]) for x in sorted_quad[1:100]]))
+    print('\n'.join([str(x[1]) + ": " + ' '.join(x[0]) for x in sorted_tri[1:100]]))
+
 

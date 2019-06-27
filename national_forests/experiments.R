@@ -135,3 +135,12 @@ ggplot(wm_peaks) +
         axis.title.y=element_blank(),
         panel.background=element_blank(),panel.border=element_blank(),panel.grid.major=element_blank(),
         panel.grid.minor=element_blank(),plot.background=element_blank())
+
+# TODO:
+# - fill in necessary, missing data (e.g. the owl's head spur and paths to cabot)
+# - impute trail segments that aren't labelled as touching 
+#   - e.g. every trail terminus is connected to the nearest other trail, if present within x miles
+# - associate peaks with on-trail coordindates
+# - infer trail intersection points
+# - build a graph where nodes are peaks and intersections, and edges are paths with weight equal to distance (or a mixture of distance and elevation)
+# - run travelling salesman on the peaks

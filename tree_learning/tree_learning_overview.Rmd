@@ -3,7 +3,6 @@ title: "Tree Learning"
 author: "Karl Holub <kholub@tripadvisor.com>"
 date: '2018-08-31'
 output:
-  pdf_document: default
   html_document: default
 ---
 

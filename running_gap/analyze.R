@@ -24,7 +24,8 @@ records_with_distance %>%
   ggplot() +
     geom_point(aes(log(distance_meters), log(duration), color = gender)) +
     xlab('Log(Distance)') +
-    ylab('Log(Duration)')
+    ylab('Log(Duration)') +
+    ggtitle('World Record Running Times')
 
 records_with_distance %>% filter(gender == 'male') %>%
   inner_join((records_with_distance %>% filter(gender == 'female')), by = 'distance_meters') %>%
@@ -33,3 +34,7 @@ records_with_distance %>% filter(gender == 'male') %>%
     geom_line(aes(distance_meters, time_ratio)) +
     xlab('Distance (m)') +
     ylab('Time Ratio (men/women)')
+
+# we get the "cup" illusion from 25K, 30K, and 100K events
+# at the risk of being biased, I think all of these are the least common events in the record list
+# if we exclude them, the gap is a pretty flat and low variance 8-12%

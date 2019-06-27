@@ -62,7 +62,7 @@ Almetric exposes their attention score in a publically available API, keyed by D
 # loop instead of vectorized so that intermediate results aren't lost.
 json_dumps <- c()
 total_requests <- 1
-for (doi in sampled_dois[63256:length(sampled_dois)]) {
+for (doi in sampled_dois[193145:length(sampled_dois)]) {
   Sys.sleep(1)
   if (total_requests %% 10000 == 0) {
       writeLines(json_dumps, file('./static/raw_json_save.txt'))
@@ -166,32 +166,46 @@ doi_to_wtp$wtp <- abs(sentimentr::sentiment(titles)$sentiment)
 score_joined_studies <- studies %>%
   left_join(doi_to_sap, by = 'doi') %>%
   left_join(doi_to_wtp, by = 'doi') %>%
-  select(doi, title, attention_score, paper_field, sap, wtp)
+  select(doi, title, attention_score, paper_field, publisher_field, sap, wtp) %>%
+  filter(!is.na(sap) & !is.na(wtp)) %>%
+  filter(attention_score > 3)
 
 score_joined_studies %>% arrange(-sap) %>% head()
 
-with(score_joined_studies %>% filter(!is.na(sap)), cor(sap, attention_score, method = 'spearman'))
-with(score_joined_studies %>% filter(!is.na(wtp)), cor(wtp, attention_score, method = 'spearman'))
-with(score_joined_studies %>% filter(!is.na(wtp) & !is.na(sap)), cor(wtp, sap, method = 'spearman'))
+score_joined_studies %>% 
+  mutate(as_group = as.character(cut(score_joined_studies$attention_score, 
+                                     unique(quantile(score_joined_studies$attention_score, seq(0,1, .02)))))) %>%
+  group_by(as_group) %>%
+  summarize(
+    mean_wtp = mean(wtp),
+    n_papers = n()
+  ) %>%
+  arrange(-mean_wtp)
+
+with(score_joined_studies, cor(sap, attention_score, method = 'spearman'))
+with(score_joined_studies, cor(wtp, attention_score, method = 'spearman'))
+with(score_joined_studies, cor(wtp, sap, method = 'spearman'))
 
 # since it's likely that different fields have different magnitudes of online attention
 score_joined_studies %>% 
   filter(!is.na(wtp)) %>%
-  group_by(paper_field) %>%
+  group_by(publisher_field) %>%
   filter(n() > 50) %>%
   summarize(
     correlation = cor(wtp, attention_score, method = 'spearman'),
     papers = n()
-  )
+  ) %>%
+  arrange(-papers)
 
 score_joined_studies %>% 
   filter(!is.na(sap)) %>%
-  group_by(paper_field) %>%
+  group_by(publisher_field) %>%
   filter(n() > 50) %>%
   summarize(
     correlation = cor(sap, attention_score, method = 'spearman'),
     papers = n()
-  )
+  ) %>%
+  arrange(-papers)
 ```
 
 ### Visualizing and Understanding the Sample
