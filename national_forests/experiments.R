@@ -167,7 +167,7 @@ haversine_distance <- function(lat1, lon1, lat2, lon2) {
 oh_coords <- wm_peaks %>% filter(name == "Owl's Head")
 oh_closest_point <- (wm_trails_df %>%
   mutate(
-    distance = haversine_distance(oh_coords$lat, oh_coords$lon, lat, lon)
+    distance = sapply(1:nrow(.), function(ix){ haversine_distance(oh_coords$lat, oh_coords$lon, lat[ix], lon[ix])})
   ) %>%
   arrange(distance) %>%
   select(-distance))[1,]
@@ -207,54 +207,36 @@ wm_trails_df <- wm_trails_df %>% rbind(presidential_hwy_path, stringsAsFactors=F
 ##########################
 # it appears that trail points are in sorted order, so terminuses are the first and last rows within each trail group
 # this may not be true, but it makes life so much easier, we assume it
-JOIN_PROXIMITY_KM <- .5 # a guessed limit as to how far people may bushwack between official trails
+JOIN_PROXIMITY_KM <- 1.5 # I eyeballed this parameter to capture trails mised by by usfs
 trail_terminuses <- wm_trails_df %>%
   mutate(ix = 1:nrow(wm_trails_df)) %>%
   group_by(trail_name) %>%
   do(
-    terminuses = (.) %>% filter(ix == min(.$ix) | ix == max(.$ix))
+    terminuses = (.) %>% filter(ix == min(.$ix) | ix == max(.$ix)) %>% select(-ix)
   ) %>%
-  pull(terminuses)
+  pull(terminuses) %>%
+  bind_rows()
 
 new_points <- data.frame()
 
 for (ix in 1:nrow(trail_terminuses)) {
   # yeesh
-  terminuses <- trail_terminuses[ix,'terminuses'][[1]][[1]]
-  trail_name <- as.character(trail_terminuses[ix, 'trail_name'][[1]])
+  terminus <- trail_terminuses[ix, ]
   
-  term1 <- terminuses[1, ]
-  term2 <- terminuses[2, ]
-  
-  trail_distances <- wm_trails_df %>%
-    filter(trail_name != trail) %>%
+  closest_terminus <- trail_terminuses %>%
+    filter(trail_name != terminus$trail_name) %>%
     mutate(
-      distance_km1 = sapply(1:nrow(.), function(rix) {haversine_distance(term1$lat, term1$lon,
-                                       lat[rix], lon[rix])}),
-      distance_km2 = sapply(1:nrow(.), function(rix) {haversine_distance(term2$lat, term2$lon,
-                                                                         lat[rix], lon[rix])})
-    ) 
+      distance_km = sapply(1:nrow(.), function(rix) {haversine_distance(terminus$lat, terminus$lon,
+                                                                     lat[rix], lon[rix])})
+    ) %>%
+    slice(which.min(distance_km))
   
-  closest1 <- trail_distances %>%
-    slice(which.min(distance_km1))
-  closest2 <- trail_distances %>%
-    slice(which.min(distance_km2))
   
-  # if the points are exactly equal, no need to 
-  if (closest1$distance_km1 > 0 && closest1$distance_km1 < JOIN_PROXIMITY_KM) {
-    imputed_extension <- impute_line(term1$lat, term1$lon, closest1$lat, closest1$lon, 100) %>%
+  # if the points are exactly equal, no need to duplicate
+  if (closest_terminus$distance_km > 0 && closest_terminus$distance_km < JOIN_PROXIMITY_KM) {
+    imputed_extension <- impute_line(terminus$lat, terminus$lon, closest_terminus$lat, closest_terminus$lon, closest_terminus$distance_km * 50) %>%
       mutate(
-        trail_name = trail_name,
-        imputed = TRUE
-      )
-    
-    new_points <- rbind(new_points, imputed_extension, stringsAsFactors = FALSE)
-  }
-  
-  if (closest2$distance_km1 > 0 && closest2$distance_km1 < JOIN_PROXIMITY_KM) {
-    imputed_extension <- impute_line(term2$lat, term2$lon, closest2$lat, closest2$lon, 100) %>%
-      mutate(
-        trail_name = trail_name,
+        trail_name = terminus$trail_name,
         imputed = TRUE
       )
     
@@ -266,9 +248,10 @@ imputed_wm <- wm_trails_df %>%
   rbind(new_points, stringsAsFactors=FALSE)
 
 ggplot(wm_peaks) + 
-  geom_point(aes(lon, lat, color=col), data=imputed_wm %>% mutate(col = ifelse(imputed, 'blue', 'grey')), size=.2, alpha=.2) +
+  geom_point(aes(lon, lat, color=imputed), data=imputed_wm, size=.2, alpha=.2) +
+  scale_color_manual(values = c("grey", "darkseagreen2")) +
   geom_point(aes(lon, lat), colour='red', shape=24, size=2) +
-  #geom_text(aes(lon, lat, label=name)) +
+  geom_text(aes(lon, lat, label=name)) +
   theme(plot.title = element_text(size=30),
         axis.text=element_text(size=20),
         axis.title=element_text(size=20),
@@ -281,5 +264,36 @@ ggplot(wm_peaks) +
 
 #########################
 # associate peaks with the trail
+#########################
+peak_trail_points <- data.frame()
+for (ix in 1:nrow(wm_peaks)) {
+  peak <- wm_peaks[ix, ]
+  closest_trail_point <- imputed_wm %>%
+    mutate(
+      distance_km = sapply(1:nrow(.), function(rix) {haversine_distance(peak$lat, peak$lon,
+                                                                        lat[rix], lon[rix])})
+    ) %>%
+    slice(which.min(distance_km)) %>%
+    mutate(peak_name = peak$name)
+  peak_trail_points <- rbind(peak_trail_points, closest_trail_point, stringsAsFactors=FALSE)
+}
+
+
+#########################
+# build the trail graph.
+#########################
+
+# here's the approach:
+# 1. find all trail intersections (including T intersections). Two approaches I am imagining:
+#    a. Use a line sweep approach: https://www.geeksforgeeks.org/given-a-set-of-line-segments-find-if-any-two-segments-intersect/
+#    b. Using the heuristic that all "lines" are actually really short, using a moving box approach, where all pairs of line segments within the box are considered. intersecting pairs are collected in a set
+# 2. add a point to each trail representing the intersection
+# 3. compute graph vertices as the union of peak points, trail terminuses, and trail intersections
+# 4. compute graph edges by walking from trail terminus 1 to trail terminus 2 for all trails. when a traversed point belongs to a graph vertex:
+#   a. compute the summed distance between all pairs of points along the trail, from the last vertex
+#   b. add the distance as an edge weight to the graph
+
+#########################
+# compute the direttissima
 #########################
 
