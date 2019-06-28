@@ -218,6 +218,7 @@ trail_terminuses <- wm_trails_df %>%
   bind_rows()
 
 new_points <- data.frame()
+joined_terminuses <- data.frame()
 
 for (ix in 1:nrow(trail_terminuses)) {
   # yeesh
@@ -233,12 +234,21 @@ for (ix in 1:nrow(trail_terminuses)) {
   
   
   # if the points are exactly equal, no need to duplicate
-  if (closest_terminus$distance_km > 0 && closest_terminus$distance_km < JOIN_PROXIMITY_KM) {
+  # additionally, prevent duplication of imputation (x imputed to y, then y imputed to x)
+  prior_imputations <- joined_terminuses %>% filter(
+    lat_from == closest_terminus$lat & lon_from == closest_terminus$lon &
+      lat_to == terminus$lat & lon_to == terminus$lon)
+  
+  if (closest_terminus$distance_km > 0 && closest_terminus$distance_km < JOIN_PROXIMITY_KM &&
+      nrow(prior_imputations) == 0) {
     imputed_extension <- impute_line(terminus$lat, terminus$lon, closest_terminus$lat, closest_terminus$lon, closest_terminus$distance_km * 50) %>%
       mutate(
         trail_name = terminus$trail_name,
         imputed = TRUE
       )
+    
+    joined_terminuses <- rbind(joined_terminuses, data.frame(lat_from=terminus$lat, lon_from= terminus$lon,
+                                                             lat_to=closest_terminus$lat, lon_to=closest_terminus$lon))
     
     new_points <- rbind(new_points, imputed_extension, stringsAsFactors = FALSE)
   }
@@ -251,7 +261,7 @@ ggplot(wm_peaks) +
   geom_point(aes(lon, lat, color=imputed), data=imputed_wm, size=.2, alpha=.2) +
   scale_color_manual(values = c("grey", "darkseagreen2")) +
   geom_point(aes(lon, lat), colour='red', shape=24, size=2) +
-  geom_text(aes(lon, lat, label=name)) +
+  # geom_text(aes(lon, lat, label=name)) +
   theme(plot.title = element_text(size=30),
         axis.text=element_text(size=20),
         axis.title=element_text(size=20),
