@@ -4,22 +4,23 @@ library(rvest)
 library(dplyr)
 library(ggplot2)
 library(stringr)
+library(pracma)
 
 # layers are:
 # Administrative_Forest_Boundaries
 # FSTopo_Quadrangle
 # National_Forest_System_Trails
-wm_trails <- readOGR("/Users/kholub/snippets/national_forests/white_mountains.gdb", "National_Forest_System_Trails")
+wm_trails <- readOGR("~/snippets/national_forests/white_mountains.gdb", "National_Forest_System_Trails")
 summary(wm_trails)
 plot(wm_trails)
 
-wm_topo <- readOGR("/Users/kholub/snippets/national_forests/white_mountains.gdb", "FSTopo_Quadrangle")
+wm_topo <- readOGR("~/snippets/national_forests/white_mountains.gdb", "FSTopo_Quadrangle")
 plot(wm_topo)
 
-bw_trails <- readOGR("/Users/kholub/snippets/national_forests/boundary_waters.gdb", "National_Forest_System_Trails")
+bw_trails <- readOGR("~/snippets/national_forests/boundary_waters.gdb", "National_Forest_System_Trails")
 plot(bw_trails)
 
-w_trails <- readOGR("/Users/kholub/snippets/national_forests/williamette.gdb", "National_Forest_System_Trails")
+w_trails <- readOGR("~/snippets/national_forests/williamette.gdb", "National_Forest_System_Trails")
 plot(w_trails, axes=TRUE)
 sort(as.character(w_trails$TRAIL_NAME))
 south_sister_trail <- w_trails[w_trails$TRAIL_NAME == 'SOUTH SISTER CLIMBER',]
@@ -36,7 +37,10 @@ wm_trails_df <- lapply(1:length(wm_trails@lines), function(ix) {
   coords_df$trail_name <- trail_name
   coords_df
 }) %>% 
-  bind_rows()
+  bind_rows() %>%
+  mutate(
+    imputed=FALSE
+  )
 
 #######################
 ## get coordinates of white mountain 4000 footers
@@ -144,3 +148,138 @@ ggplot(wm_peaks) +
 # - infer trail intersection points
 # - build a graph where nodes are peaks and intersections, and edges are paths with weight equal to distance (or a mixture of distance and elevation)
 # - run travelling salesman on the peaks
+
+impute_line <- function(lat1, lon1, lat2, lon2, points=500) {
+  data.frame(
+    lat = seq(lat1, lat2, length.out = points),
+    lon = seq(lon1, lon2, length.out = points)
+  )
+}
+
+haversine_distance <- function(lat1, lon1, lat2, lon2) {
+  haversine(c(lat1, lon1), c(lat2, lon2))
+}
+
+#########################
+# fill in missing trails
+#########################
+# first, add a spur (exists in reality) for Owl's Head
+oh_coords <- wm_peaks %>% filter(name == "Owl's Head")
+oh_closest_point <- (wm_trails_df %>%
+  mutate(
+    distance = haversine_distance(oh_coords$lat, oh_coords$lon, lat, lon)
+  ) %>%
+  arrange(distance) %>%
+  select(-distance))[1,]
+# of course OWLS HEAD PATH is not perfectly straight in reality
+oh_path <- impute_line(oh_closest_point$lat, oh_closest_point$lon,
+                       oh_coords$lat, oh_coords$lon) %>%
+  mutate(
+    trail_name='OWLS HEAD PATH',
+    imputed=TRUE
+  )
+wm_trails_df <- wm_trails_df %>%
+  rbind(oh_path, stringsAsFactors=FALSE)
+
+# now we join the northern system to the southern system
+# in reality, it looks like there is no trail directly joining the two - there is a east-west highway (2) cutting them off
+# it looks like there are a couple possible routes between, the simplest of which is using the highway itself
+# it is unfortunate because this will certainly influence the direttissima, since we are constraining where the two join up.
+# in reality, there are more possible routes using other roads or bushwacking
+# but, here we'll join Castle Trail and Starr King, which is possible using the "Presidential Highway"
+# https://www.alltrails.com/explore?b_tl_lat=44.37285823261243&b_tl_lng=-71.41559600830078&b_br_lat=44.346869844887586&b_br_lng=-71.37160778045654
+castle <- wm_trails_df %>% filter(trail_name == "CASTLE")
+castle_terminus <- castle %>% filter(lat == max(castle$lat))
+
+starr <- wm_trails_df %>% filter(trail_name == 'STARR KING')
+starrt <- starr %>% filter(lon == min(starr$lon))
+presidential_hwy_path <- impute_line(castle_terminus$lat, castle_terminus$lon,
+                                     starrt$lat, starrt$lon) %>%
+  mutate(
+    trail_name = "PRESIDENTIAL HWY",
+    imputed=TRUE
+  )
+
+wm_trails_df <- wm_trails_df %>% rbind(presidential_hwy_path, stringsAsFactors=FALSE)
+
+##########################
+# join together trail terminuses to nearby trails
+##########################
+# it appears that trail points are in sorted order, so terminuses are the first and last rows within each trail group
+# this may not be true, but it makes life so much easier, we assume it
+JOIN_PROXIMITY_KM <- .5 # a guessed limit as to how far people may bushwack between official trails
+trail_terminuses <- wm_trails_df %>%
+  mutate(ix = 1:nrow(wm_trails_df)) %>%
+  group_by(trail_name) %>%
+  do(
+    terminuses = (.) %>% filter(ix == min(.$ix) | ix == max(.$ix))
+  ) %>%
+  pull(terminuses)
+
+new_points <- data.frame()
+
+for (ix in 1:nrow(trail_terminuses)) {
+  # yeesh
+  terminuses <- trail_terminuses[ix,'terminuses'][[1]][[1]]
+  trail_name <- as.character(trail_terminuses[ix, 'trail_name'][[1]])
+  
+  term1 <- terminuses[1, ]
+  term2 <- terminuses[2, ]
+  
+  trail_distances <- wm_trails_df %>%
+    filter(trail_name != trail) %>%
+    mutate(
+      distance_km1 = sapply(1:nrow(.), function(rix) {haversine_distance(term1$lat, term1$lon,
+                                       lat[rix], lon[rix])}),
+      distance_km2 = sapply(1:nrow(.), function(rix) {haversine_distance(term2$lat, term2$lon,
+                                                                         lat[rix], lon[rix])})
+    ) 
+  
+  closest1 <- trail_distances %>%
+    slice(which.min(distance_km1))
+  closest2 <- trail_distances %>%
+    slice(which.min(distance_km2))
+  
+  # if the points are exactly equal, no need to 
+  if (closest1$distance_km1 > 0 && closest1$distance_km1 < JOIN_PROXIMITY_KM) {
+    imputed_extension <- impute_line(term1$lat, term1$lon, closest1$lat, closest1$lon, 100) %>%
+      mutate(
+        trail_name = trail_name,
+        imputed = TRUE
+      )
+    
+    new_points <- rbind(new_points, imputed_extension, stringsAsFactors = FALSE)
+  }
+  
+  if (closest2$distance_km1 > 0 && closest2$distance_km1 < JOIN_PROXIMITY_KM) {
+    imputed_extension <- impute_line(term2$lat, term2$lon, closest2$lat, closest2$lon, 100) %>%
+      mutate(
+        trail_name = trail_name,
+        imputed = TRUE
+      )
+    
+    new_points <- rbind(new_points, imputed_extension, stringsAsFactors = FALSE)
+  }
+}
+
+imputed_wm <- wm_trails_df %>%
+  rbind(new_points, stringsAsFactors=FALSE)
+
+ggplot(wm_peaks) + 
+  geom_point(aes(lon, lat, color=col), data=imputed_wm %>% mutate(col = ifelse(imputed, 'blue', 'grey')), size=.2, alpha=.2) +
+  geom_point(aes(lon, lat), colour='red', shape=24, size=2) +
+  #geom_text(aes(lon, lat, label=name)) +
+  theme(plot.title = element_text(size=30),
+        axis.text=element_text(size=20),
+        axis.title=element_text(size=20),
+        axis.line=element_blank(),axis.text.x=element_blank(),
+        axis.text.y=element_blank(),axis.ticks=element_blank(),
+        axis.title.x=element_blank(),
+        axis.title.y=element_blank(),
+        panel.background=element_blank(),panel.border=element_blank(),panel.grid.major=element_blank(),
+        panel.grid.minor=element_blank(),plot.background=element_blank())
+
+#########################
+# associate peaks with the trail
+#########################
+
