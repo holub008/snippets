@@ -23,8 +23,13 @@ plot(wm_topo)
 wm_trails_df <- lapply(1:length(wm_trails@lines), function(ix) {
   trail_coords <- wm_trails@lines[[ix]]@Lines[[1]]@coords %>% unique() # note, unique should maintain row order
   trail_name <- wm_trails@data$TRAIL_NAME[ix]
+  trail_length <- wm_trails$SEGMENT_LENGTH[ix]
   
-  coords_df <- data.frame(lon = trail_coords[,1], lat = trail_coords[,2])
+  # sub-sample at a rate of 50 points per mile, just to have smaller data to work with
+  ppm <- dim(trail_coords)[1] / trail_length
+  sfrac <- if (dim(trail_coords)[1] > 50) min(50 / ppm , 1) else 1
+  include_mask <- rbinom(dim(trail_coords)[1], 1, sfrac) == 1
+  coords_df <- data.frame(lon = trail_coords[include_mask,1], lat = trail_coords[include_mask,2])
   coords_df$trail_name <- trail_name
   coords_df
 }) %>% 
@@ -119,7 +124,7 @@ get_wm_peaks <- function(base_url="http://4000footers.com/") {
 wm_peaks <- read.csv('~/snippets/national_forests/wm_peaks.csv')
 
 ggplot(wm_peaks) + 
-  geom_point(aes(lon, lat), data=wm_trails_df %>% sample_frac(.1), size=.2, color='grey', alpha=.2) +
+  geom_point(aes(lon, lat), data=wm_trails_df %>% sample_frac(.5), size=.2, color='grey', alpha=.2) +
   geom_point(aes(lon, lat), colour='red', shape=24, size=2) +
   #geom_text(aes(lon, lat, label=name)) +
   theme(plot.title = element_text(size=30),
@@ -199,7 +204,7 @@ wm_trails_df <- wm_trails_df %>% rbind(presidential_hwy_path, stringsAsFactors=F
 ##########################
 # it appears that trail points are in sorted order, so terminuses are the first and last rows within each trail group
 # this may not be true, but it makes life so much easier, we assume it
-JOIN_PROXIMITY_KM <- 1.5 # I eyeballed this parameter to capture trails mised by by usfs
+JOIN_PROXIMITY_KM <- 1.5 # I eyeballed this parameter to capture trails plausibily missing in usfs data
 trail_terminuses <- wm_trails_df %>%
   mutate(ix = 1:nrow(wm_trails_df)) %>%
   group_by(trail_name) %>%
@@ -210,39 +215,53 @@ trail_terminuses <- wm_trails_df %>%
   bind_rows()
 
 new_points <- data.frame()
-joined_terminuses <- data.frame()
+prior_imputations <- data.frame()
 
 for (ix in 1:nrow(trail_terminuses)) {
-  # yeesh
   terminus <- trail_terminuses[ix, ]
   
-  closest_terminus <- trail_terminuses %>%
+  proximity_terminuses <- trail_terminuses %>%
     filter(trail_name != terminus$trail_name) %>%
     mutate(
       distance_km = sapply(1:nrow(.), function(rix) {haversine_distance(terminus$lat, terminus$lon,
                                                                      lat[rix], lon[rix])})
     ) %>%
-    slice(which.min(distance_km))
+    #filter(distance_km <= JOIN_PROXIMITY_KM & distance_km > 0) %>%
+    filter(JOIN_PROXIMITY_KM > distance_km) %>%
+    slice(which.min(distance_km)) %>%
+    mutate(
+      lat_from = terminus$lat,
+      lon_from = terminus$lon,
+      lat_to = lat,
+      lon_to = lon,
+      trail_name = paste0(terminus$trail_name, ' imputed ', trail_name)
+    ) %>%
+    select(-lat, -lon)
   
   
-  # if the points are exactly equal, no need to duplicate
-  # additionally, prevent duplication of imputation (x imputed to y, then y imputed to x)
-  prior_imputations <- joined_terminuses %>% filter(
-    lat_from == closest_terminus$lat & lon_from == closest_terminus$lon &
-      lat_to == terminus$lat & lon_to == terminus$lon)
+  # make sure a path of the same ground but opposite direction hasn't alrady been added
+  if (nrow(prior_imputations) > 0 ) {
+    imputations_for_insert <- proximity_terminuses %>%
+      anti_join(prior_imputations, by=c('lat_from' = 'lat_from', 'lon_from' = 'lon_from',
+                                        'lat_to' = 'lat_to', 'lon_to' = 'lon_to')) 
+  }
+  else {
+    imputations_for_insert <- proximity_terminuses
+  }
   
-  if (closest_terminus$distance_km > 0 && closest_terminus$distance_km < JOIN_PROXIMITY_KM &&
-      nrow(prior_imputations) == 0) {
-    imputed_extension <- impute_line(terminus$lat, terminus$lon, closest_terminus$lat, closest_terminus$lon, closest_terminus$distance_km * 50) %>%
-      mutate(
-        trail_name = terminus$trail_name,
-        imputed = TRUE
-      )
-    
-    joined_terminuses <- rbind(joined_terminuses, data.frame(lat_from=terminus$lat, lon_from= terminus$lon,
-                                                             lat_to=closest_terminus$lat, lon_to=closest_terminus$lon))
-    
-    new_points <- rbind(new_points, imputed_extension, stringsAsFactors = FALSE)
+  if (nrow(imputations_for_insert) > 0) {
+    for (imputation_ix in 1:nrow(imputations_for_insert)) {
+      imputation <- imputations_for_insert[imputation_ix,]
+      new_trail <- impute_line(imputation$lat_from, imputation$lon_from, imputation$lat_to, imputation$lon_to, imputation$distance_km * 50) %>%
+        mutate(
+          imputed = TRUE,
+          trail_name = imputation$trail_name
+        )
+      
+      new_points <- rbind(new_points, new_trail, stringsAsFactors = FALSE)
+      prior_imputations <- rbind(prior_imputations, data.frame(lat_from=imputation$lat_from, lon_from= imputation$lon_from,
+                                                               lat_to=imputation$lat_to, lon_to=imputation$lon_to))
+    }
   }
 }
 
@@ -255,9 +274,10 @@ imputed_wm <- wm_trails_df %>%
   arrange(index)
 
 ggplot(wm_peaks) + 
-  geom_point(aes(lon, lat, color=imputed), data=imputed_wm %>% sample_frac(.2), size=.2, alpha=.2) +
+  geom_point(aes(lon, lat, color=imputed), data=imputed_wm, size=.2, alpha=.2) +
   scale_color_manual(values = c("grey", "darkseagreen2")) +
   geom_point(aes(lon, lat), colour='red', shape=24, size=2) +
+  geom_point(aes(lon, lat), data=trail_terminuses, color='black') + 
   # geom_text(aes(lon, lat, label=name)) +
   theme(plot.title = element_text(size=30),
         axis.text=element_text(size=20),
@@ -344,13 +364,13 @@ line_intersection <- function(P1, P2, P3, P4) {
 lat_range <- c(min(graphable_wm$lat), max(graphable_wm$lat))
 lon_range <- c(min(graphable_wm$lon), max(graphable_wm$lon))
 
-width_denominator <- 50 # should be small enough to limit n^2 growth within boxes
-steps <- 60 # should be > width_denominator to guarantee overlap!
+width_denominator <- 100 # should be small enough to limit n^2 growth within boxes
+steps <- 110 # should be > width_denominator to guarantee overlap!
 
 lat_width <- (lat_range[2] - lat_range[1]) / width_denominator
 lon_width <- (lon_range[2] - lon_range[1]) / width_denominator
 
-intersections <- list()
+intersections <- data.frame()
 
 for (lat_step in 1:steps) {
   for (lon_step in 1:steps) {
@@ -400,12 +420,29 @@ for (lat_step in 1:steps) {
                                   c(j1$lat, j1$lon),
                                   c(j2$lat, j2$lon))
         if (!is.na(ints[1])) {
-          intersections <- c(intersections, ints)
+          intersections <- rbind(intersections, list(lat = ints[1], lon = ints[2]),
+                                 stringsAsFactors=FALSE)
         }
       }
     }
   }
 }
+
+ggplot(wm_peaks) + 
+  geom_point(aes(lon, lat, color=imputed), data=imputed_wm, size=.2, alpha=.2) +
+  scale_color_manual(values = c("grey", "darkseagreen2")) +
+  geom_point(aes(lon, lat), colour='red', shape=24, size=2) +
+  geom_point(aes(lon, lat), data=intersections, color='black') + 
+  # geom_text(aes(lon, lat, label=name)) +
+  theme(plot.title = element_text(size=30),
+        axis.text=element_text(size=20),
+        axis.title=element_text(size=20),
+        axis.line=element_blank(),axis.text.x=element_blank(),
+        axis.text.y=element_blank(),axis.ticks=element_blank(),
+        axis.title.x=element_blank(),
+        axis.title.y=element_blank(),
+        panel.background=element_blank(),panel.border=element_blank(),panel.grid.major=element_blank(),
+        panel.grid.minor=element_blank(),plot.background=element_blank())
 
 
 #########################
