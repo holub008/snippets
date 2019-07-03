@@ -17,20 +17,11 @@ plot(wm_trails)
 wm_topo <- readOGR("~/snippets/national_forests/white_mountains.gdb", "FSTopo_Quadrangle")
 plot(wm_topo)
 
-bw_trails <- readOGR("~/snippets/national_forests/boundary_waters.gdb", "National_Forest_System_Trails")
-plot(bw_trails)
-
-w_trails <- readOGR("~/snippets/national_forests/williamette.gdb", "National_Forest_System_Trails")
-plot(w_trails, axes=TRUE)
-sort(as.character(w_trails$TRAIL_NAME))
-south_sister_trail <- w_trails[w_trails$TRAIL_NAME == 'SOUTH SISTER CLIMBER',]
-plot(south_sister_trail, axes=T)
-
 ######################
 ## push all of the white mountains trails into a simple, long dataframe format
 ## probably better to use the object & its API, but I'm obstinate, lazy, and the data is little - dataframe it is!
 wm_trails_df <- lapply(1:length(wm_trails@lines), function(ix) {
-  trail_coords <- wm_trails@lines[[ix]]@Lines[[1]]@coords
+  trail_coords <- wm_trails@lines[[ix]]@Lines[[1]]@coords %>% unique() # note, unique should maintain row order
   trail_name <- wm_trails@data$TRAIL_NAME[ix]
   
   coords_df <- data.frame(lon = trail_coords[,1], lat = trail_coords[,2])
@@ -41,6 +32,7 @@ wm_trails_df <- lapply(1:length(wm_trails@lines), function(ix) {
   mutate(
     imputed=FALSE
   )
+  
 
 #######################
 ## get coordinates of white mountain 4000 footers
@@ -127,7 +119,7 @@ get_wm_peaks <- function(base_url="http://4000footers.com/") {
 wm_peaks <- read.csv('~/snippets/national_forests/wm_peaks.csv')
 
 ggplot(wm_peaks) + 
-  geom_point(aes(lon, lat), data=wm_trails_df, size=.2, color='grey', alpha=.2) +
+  geom_point(aes(lon, lat), data=wm_trails_df %>% sample_frac(.1), size=.2, color='grey', alpha=.2) +
   geom_point(aes(lon, lat), colour='red', shape=24, size=2) +
   #geom_text(aes(lon, lat, label=name)) +
   theme(plot.title = element_text(size=30),
@@ -255,10 +247,15 @@ for (ix in 1:nrow(trail_terminuses)) {
 }
 
 imputed_wm <- wm_trails_df %>%
-  rbind(new_points, stringsAsFactors=FALSE)
+  rbind(new_points, stringsAsFactors=FALSE) %>%
+  mutate(
+    index = row_number() # since points are ordered within trails, we use the index to maintain order, e.g. through a distinct()
+  ) %>%
+  distinct(trail_name, lat, lon, .keep_all = TRUE) %>%
+  arrange(index)
 
 ggplot(wm_peaks) + 
-  geom_point(aes(lon, lat, color=imputed), data=imputed_wm, size=.2, alpha=.2) +
+  geom_point(aes(lon, lat, color=imputed), data=imputed_wm %>% sample_frac(.2), size=.2, alpha=.2) +
   scale_color_manual(values = c("grey", "darkseagreen2")) +
   geom_point(aes(lon, lat), colour='red', shape=24, size=2) +
   # geom_text(aes(lon, lat, label=name)) +
@@ -281,29 +278,140 @@ for (ix in 1:nrow(wm_peaks)) {
   closest_trail_point <- imputed_wm %>%
     mutate(
       distance_km = sapply(1:nrow(.), function(rix) {haversine_distance(peak$lat, peak$lon,
-                                                                        lat[rix], lon[rix])})
+                                                             lat[rix], lon[rix])})
     ) %>%
     slice(which.min(distance_km)) %>%
-    mutate(peak_name = peak$name)
+    mutate(peak_name = peak$name) %>%
+    select(lat, lon, peak_name, trail_name)
   peak_trail_points <- rbind(peak_trail_points, closest_trail_point, stringsAsFactors=FALSE)
 }
 
-
+graphable_wm <- imputed_wm %>%
+  left_join(peak_trail_points, by=c('lat' = 'lat', 'lon'='lon', 'trail_name' = 'trail_name'))
+sum(!is.na(graphable_wm$peak_name))
 #########################
 # build the trail graph.
 #########################
-
 # here's the approach:
 # 1. find all trail intersections (including T intersections). Two approaches I am imagining:
 #    a. Use a line sweep approach: https://www.geeksforgeeks.org/given-a-set-of-line-segments-find-if-any-two-segments-intersect/
 #    b. Using the heuristic that all "lines" are actually really short, using a moving box approach, where all pairs of line segments within the box are considered. intersecting pairs are collected in a set
 # 2. add a point to each trail representing the intersection
 # 3. compute graph vertices as the union of peak points, trail terminuses, and trail intersections
+# 4. dedupe any co-located vertices
 # 4. compute graph edges by walking from trail terminus 1 to trail terminus 2 for all trails. when a traversed point belongs to a graph vertex:
 #   a. compute the summed distance between all pairs of points along the trail, from the last vertex
 #   b. add the distance as an edge weight to the graph
 
+####
+# 1b
+####
+# note intersection in euclidean space != intersection in LL coordinate space, but close enough
+line_intersection <- function(P1, P2, P3, P4) {
+  dx1 <- P1[1] - P2[1]
+  dx2 <- P3[1] - P4[1]
+  dy1 <- P1[2] - P2[2]
+  dy2 <- P3[2] - P4[2]
+  
+  D <- det(rbind(c(dx1, dy1),
+                 c(dx2, dy2)))
+  # if deltas are singular, points are parallel, so no intersection
+  if (D==0) {
+    return(c(NA, NA))
+  }
+  
+  D1 <- det(rbind(P1, P2))
+  D2 <- det(rbind(P3, P4))
+  
+  X <- det(rbind(c(D1, dx1),
+                 c(D2, dx2)))/D
+  Y <- det(rbind(c(D1, dy1),
+                 c(D2, dy2)))/D
+  
+  ## Compute the fractions of L1 and L2 at which the intersection
+  ## occurs
+  lambda1 <- -((X-P1[1])*dx1 + (Y-P1[2])*dy1)/(dx1^2 + dy1^2)
+  lambda2 <- -((X-P3[1])*dx2 + (Y-P3[2])*dy2)/(dx2^2 + dy2^2)
+  if (!((lambda1>0) & (lambda1<1) &
+        (lambda2>0) & (lambda2<1))) {
+    return(c(NA, NA))
+  }
+  
+  return(c(X, Y))
+}
+
+# width in decimal degrees (ie no meaningful in measurable distances)
+lat_range <- c(min(graphable_wm$lat), max(graphable_wm$lat))
+lon_range <- c(min(graphable_wm$lon), max(graphable_wm$lon))
+
+width_denominator <- 50 # should be small enough to limit n^2 growth within boxes
+steps <- 60 # should be > width_denominator to guarantee overlap!
+
+lat_width <- (lat_range[2] - lat_range[1]) / width_denominator
+lon_width <- (lon_range[2] - lon_range[1]) / width_denominator
+
+intersections <- list()
+
+for (lat_step in 1:steps) {
+  for (lon_step in 1:steps) {
+    print(paste0(lat_step, ', ', lon_step))
+    lat1 <- lat_range[1] + lat_width * lat_step
+    lat2 <- lat_range[1] + lat_width * (lat_step + 1)
+    
+    lon1 <- lon_range[1] + lon_width * lon_step
+    lon2 <- lon_range[1] + lon_width * (lon_step + 1)
+    
+    if (lat2 > (lat_range[2] + lat_width / 2) ||
+        lon2 > (lon_range[2] + lon_width / 2)) {
+      next()
+    }
+    
+    # note, we may be chopping off some corner paths (e.g. where a line has a point in & out of the box)
+    # this isn't a problem because we are overlapping boxes with large enough margin to re-capture all such lines
+    relevant_points <- graphable_wm %>% filter(
+      lat >= lat1 & lat <= lat2 & lon >= lon1 & lon <= lon2
+    ) %>%
+      arrange(trail_name, index)
+    
+    if (nrow(relevant_points) == 0 || n_distinct(relevant_points$trail_name) == 1) {
+      next()
+    }
+    
+    print(nrow(relevant_points))
+    
+    # TODO, this is obviously slow
+    # smarter indexing or vectorizing could speed up
+    for (i in 1:(nrow(relevant_points) - 1)) {
+      for (j in i:(nrow(relevant_points) - 1)) {
+        i1 <- relevant_points[i,]
+        i2 <- relevant_points[i + 1,]
+        j1 <- relevant_points[j,]
+        j2 <- relevant_points[j + 1,]
+        
+        # ignore the case where both segments are the same trail, or
+        if (i1$trail_name == j1$trail_name ||
+            i1$trail_name != i2$trail_name ||
+            j1$trail_name != j1$trail_name) {
+          next()
+        }
+        
+        ints <- line_intersection(c(i1$lat, i1$lon),
+                                  c(i2$lat, i2$lon),
+                                  c(j1$lat, j1$lon),
+                                  c(j2$lat, j2$lon))
+        if (!is.na(ints[1])) {
+          intersections <- c(intersections, ints)
+        }
+      }
+    }
+  }
+}
+
+
 #########################
 # compute the direttissima
 #########################
+
+# 1. Compute all-pairs shortest paths (e.g. floyd-warshall) between peaks on the graph, and extract the shortest paths graph
+# 2. Run a standard travelling salesman solver on the shortest paths graph
 
