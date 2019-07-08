@@ -8,6 +8,7 @@ output:
     df_print: paged
 ---
 ```{r setup, include=FALSE, echo=FALSE}
+library(MASS)
 library(readxl)
 library(dplyr)
 library(readxl)
@@ -261,7 +262,7 @@ To visualize main effect correlations, we look at marginal x/y plots of latitude
 ```{r message=FALSE}
 oh_data %>%
   filter(!is.na(Minimum.Hours.Imputed)) %>%
-  ggplot(aes(Latitude, Minimum.Hours.Imputed)) +
+  ggplot(aes(Latitude, log(Minimum.Hours.Imputed))) +
     geom_point() +
     geom_smooth()
 ```
@@ -271,9 +272,9 @@ Hours look pretty flat across Latitude, with perhaps a slight decrease moving No
 ```{r message=FALSE}
 oh_data %>%
   filter(!is.na(Minimum.Hours.Imputed)) %>%
-  ggplot(aes(Longitude, Minimum.Hours.Imputed)) +
+  ggplot(aes(Longitude, log(Minimum.Hours.Imputed))) +
     geom_point() +
-    geom_smooth()
+    geom_smooth(method="lm")
 ```
 There is a definite decrease in hours moving west to east, with a possible jump upwards at the coast.
 
@@ -290,7 +291,106 @@ summary.bootstrap(bs)
 Matching our visual intuition, the Longitude correlation interval certainly does not include 0 (i.e. is a non-zero effect), while Latitude is less convincing (interval does include a 0 correlation). For future analyses, it is extremely likely that these two effects interact (e.g. due to high requirements in the Northeast US).
 
 ### Spatial Auto Correlation
-TODO
+TODO Moran's I for assessment of hours similarity
+
+### Program Density Estimation
+
+Are required number of hours tied to geographic program density? One hypothesis is that increased program density correlates with descreased availability of student openings.
+
+```{r}
+density_estimate_grid <- kde2d(oh_data$Longitude, oh_data$Latitude, n=100)
+
+gr <- with(density_estimate_grid, data.frame(expand.grid(x,y), as.vector(z)))
+names(gr) <- c("Longitude", "Latitude", "z")
+density_estimate <- loess(z~Longitude*Latitude, data=gr)
+
+oh_data$density_estimate <- predict(density_estimate, oh_data)
+
+ggplot(oh_data, aes(density_estimate, log(Minimum.Hours.Imputed))) +
+  geom_point() +
+  geom_smooth(method='lm')
+cor.test(oh_data$Minimum.Hours.Imputed, oh_data$density_estimate, 
+         use="complete.obs", alternative = "less", method="spearman")
+
+points <- expand.grid(
+  Latitude = seq(box$min_lat, box$max_lat, by = .1),
+  Longitude = seq(box$min_long, box$max_long, by = .1)
+) %>%
+  filter(point.in.polygon(Longitude, Latitude, usa$long, usa$lat) > 0)
+
+points$dw <-predict(density_estimate, points)
+
+ggplot(points) +
+  geom_raster(aes(x = Longitude, y = Latitude, fill = density_estimates), interpolate = TRUE) +
+  geom_polygon(data = us, aes(x=long, y = lat, group = group), fill=NA, color='black') + 
+  scale_fill_distiller(palette=1, direction=1) + 
+  guides(fill=guide_colorbar(title='Required Hours',
+                             barwidth = 2, barheight = 20, 
+                             title.theme=element_text(size=15), 
+                             label.theme = element_text(size=20),
+                             draw.ulim = FALSE, draw.llim = TRUE)) +
+  ggtitle('PTCAS Program Density (KDE)') +
+  theme(plot.title = element_text(size=30),
+        axis.text=element_text(size=20),
+        axis.title=element_text(size=20),
+        axis.line=element_blank(),axis.text.x=element_blank(),
+        axis.text.y=element_blank(),axis.ticks=element_blank(),
+        axis.title.x=element_blank(),
+        axis.title.y=element_blank(),
+        panel.background=element_blank(),panel.border=element_blank(),panel.grid.major=element_blank(),
+        panel.grid.minor=element_blank(),plot.background=element_blank())
+```
 
 
+```{r}
+# using actual county population
+library(sp)
+library(maps)
+library(maptools)
+library(noncensus)
+data(county.fips)
+data(counties)
 
+counties_clean <- counties %>%
+  mutate(fips = sprintf("%d%s", as.integer(as.character(state_fips)), as.character(county_fips)))
+county_fips_clean <- county.fips %>%
+  mutate(
+    fips = as.character(fips)
+  )
+
+# The single argument to this function, pointsDF, is a data.frame in which:
+#   - column 1 contains the longitude in degrees (negative in the US)
+#   - column 2 contains the latitude in degrees
+
+latlon_to_populations <- function(pointsDF) {
+    countyCentroids <- map('county', fill=TRUE, col="transparent", plot=FALSE)
+    IDs <- sapply(strsplit(countyCentroids$names, ":"), function(x) x[1])
+    counties_sp <- map2SpatialPolygons(countyCentroids, IDs=IDs,
+                     proj4string=CRS("+proj=longlat +datum=WGS84"))
+
+    # Convert pointsDF to a SpatialPoints object 
+    pointsSP <- SpatialPoints(pointsDF, 
+                    proj4string=CRS("+proj=longlat +datum=WGS84"))
+
+    # Use 'over' to get _indices_ of the Polygons object containing each point 
+    indices <- over(pointsSP, counties_sp)
+
+    # Return the county names of the Polygons object containing each point
+    data.frame(county_name = sapply(counties_sp@polygons, function(x) x@ID)[indices],
+                              stringsAsFactors = FALSE) %>%
+      left_join(county_fips_clean, by = c('county_name' = 'polyname')) %>%
+      left_join(counties_clean, by = c('fips' = 'fips')) %>%
+      pull(population)
+}
+
+testPoints <- data.frame(x = c(-90, -120), y = c(44, 44))
+
+pops <- latlon_to_populations(oh_data %>% select(Longitude, Latitude))
+oh_data$population <- pops
+
+ggplot(oh_data) +
+  geom_point(aes(log(population), Minimum.Hours.Imputed))
+
+m <- lm(log(Minimum.Hours.Imputed) ~ Latitude*Longitude + density_estimate + population, oh_data)
+summary(m)
+```
