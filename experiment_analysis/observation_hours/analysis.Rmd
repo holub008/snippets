@@ -18,6 +18,7 @@ library(maps)
 library(xrf)
 library(nymph) # install via: devtools::install_git('https://github.com/holub008/nymph')
 library(sp)
+library(pracma)
 
 parse_coords <- function(coords) {
   # all schools are in US, so we safely assume N latitude, W longitude
@@ -290,12 +291,197 @@ summary.bootstrap(bs)
 
 Matching our visual intuition, the Longitude correlation interval certainly does not include 0 (i.e. is a non-zero effect), while Latitude is less convincing (interval does include a 0 correlation). For future analyses, it is extremely likely that these two effects interact (e.g. due to high requirements in the Northeast US).
 
-### Spatial Auto Correlation
-TODO Moran's I for assessment of hours similarity
+### Spatial Autocorrelation
+
+Spatial autocorrelation is a measure of the extent to which any given observation depends on the value of other observations in the shared locality. Do required hours exhibit this property?
+
+We should already feel confident that yes, they do, since Latitude (a geographic component) correlates. However, we can answer specific questions using different types of autocorrelation. In this section, we use Moran's I to compute autocorrelation, while varying the weighting matrix to answer specific questions.
+
+```{r}
+morani <- function(x, W) {
+  n <- length(x)
+  stopifnot(n == dim(W)[1] && n == dim(W)[2])
+  
+  squared_deviation_sum <- 0
+  weighted_covariance_sum <- 0
+  xbar <- mean(x)
+  for (i in 1:n) {
+    deviation_i <- x[i] - xbar
+    for (j in 1:n) {
+      weighted_covariance_sum <- weighted_covariance_sum + W[i, j] * deviation_i * (x[j] - xbar)
+    }
+    squared_deviation_sum <- squared_deviation_sum + deviation_i ^ 2
+  }
+  
+  (n / sum(W)) * (weighted_covariance_sum / squared_deviation_sum)
+}
+```
+
+#### Nearest Neighbors
+Here we posit the question: Do programs typically have similar hours to their nearest neighboring programs? We select a parameterization of `k=10` neighboring programs, which is a plausibly small enough set of schools that a program would consider in their own determination, while large enough to likely provide a signal. Distance between programs is simply the shortest distance between the two programs on a globe (Haversine distance).
+
+```{r}
+haversine_distance <- function(lat1, lon1, lat2, lon2) {
+  haversine(c(lat1, lon1), c(lat2, lon2))
+}
+
+# points must be a dataframe with Latitude and Longitude columns
+# returns distances in KM exponeniated by distance_exp
+compute_pairwise_distances <- function(points, distance_exp = 1) {
+  distances <- matrix(0, nrow=nrow(points), ncol=nrow(points))
+  for (i in 1:nrow(points)) {
+    for (j in i:nrow(points)) {
+      dist <- haversine_distance(points[i, 'Latitude'], points[i, 'Longitude'],
+                                points[j, 'Latitude'], points[j, 'Longitude']) ^ distance_exp
+      distances[i, j] <- dist
+      distances[j, i] <- dist
+    }
+  }
+  
+  distances
+}
+
+compute_nearest_neighbors <- function(d, k=5) {
+  stopifnot(dim(d)[1] == dim(d)[2])
+  stopifnot(dim(d)[1] > k)
+  
+  neighbor_graph <- matrix(0, nrow=nrow(d), ncol=nrow(d))
+
+  for (i in 1:nrow(d)) {
+    kth_distance <- sort(d[i,])[k + 1]
+    nn_ix <- which(d[i,] <= kth_distance)
+    nn_ix <- nn_ix[nn_ix != i]
+    neighbor_graph[i, nn_ix] <- 1
+  }
+  
+  neighbor_graph
+}
+
+relevant_oh_data <- oh_data %>%
+  filter(!is.na(Minimum.Hours.Imputed))
+
+program_distances <- compute_pairwise_distances(relevant_oh_data)
+nn <- compute_nearest_neighbors(program_distances, 10)
+(moran_observed <- morani(relevant_oh_data$Minimum.Hours.Imputed, nn))
+```
+Moran's I is calculated as .143; at 216 programs, its expectation under the null is nearly 0. This value, which suggests a positive autocorrelation (programs take similar hours to those programs around them), is quite a bit larger, but how do we assess significance? Monte Carlo simulation will be used to build a null distribution of Moran's I (i.e. the empirical distribution when no autocorrelation exists): 
+
+```{r}
+# Spatial Monte-Carlo: randomly reassign values to points and recompute Moran's I to build null distribution
+spatial_mc <- function(data, trials = 1000) {
+  program_distances <- compute_pairwise_distances(data)
+  nn <- compute_nearest_neighbors(program_distances, 10)
+  
+  empirical_distribution <- c()
+  for (trail_ix in 1:trials) {
+    resampled_outcome <- sample(data$Minimum.Hours.Imputed, nrow(data), replace=TRUE)
+    moran_resampled <- morani(resampled_outcome, nn)
+    empirical_distribution <- c(empirical_distribution, moran_resampled)
+  }
+  
+  empirical_distribution
+}
+
+moran_null <- spatial_mc(relevant_oh_data)
+data.frame(moran_i = moran_null) %>%
+ggplot() +
+  geom_histogram(aes(moran_i)) +
+  geom_vline(xintercept = moran_observed) + 
+  xlab("Moran's I") +
+  ggtitle("Spatial Autocorrelation: Monte Carlo Null Distribution vs. Observed")
+```
+
+```{r}
+1 - sum(moran_null < moran_observed) / length(moran_null)
+```
+Moran's I shows high signficance, with p < .001.
+
+To better visualize this correlation, here is a plot of program observation hours (x-axis) against mean observation hours of neighboring 5 programs (y-axis):
+
+```{r}
+nn_mean <- c()
+for (ix in 1:nrow(nn)) {
+  neighbor_ixs <- which(nn[ix,] > 0)
+  nn_mean <- c(nn_mean, mean(relevant_oh_data[neighbor_ixs, 'Minimum.Hours.Imputed']))
+}
+relevant_oh_data$nn_mean <- nn_mean
+ggplot(relevant_oh_data, aes(Minimum.Hours.Imputed, nn_mean)) +
+  geom_jitter() +
+  geom_smooth(method='lm')
+```
+
+Notice that the linear model visually suggests a smaller effect than reality, since there are several high leverage points near the max extent of required hours. Moran's I is robust to these high leverage points. Nonetheless, the trend is visually apparent, particularly when the x axis is log-transformed:
+
+```{r}
+ggplot(relevant_oh_data, aes(log(Minimum.Hours.Imputed), nn_mean)) +
+  geom_jitter() +
+  geom_smooth(method='lm')
+```
+
+### Haversine Distance (straight line distance)
+Haversine distance can be used to demonstrate the effect of continuous distance on required hours. The subtle difference from nearest neighbors is that continuous distance considers *all* programs, not just the closest `k`.
+
+```{r}
+# invert, so that nearer programs have higher weight
+haversine_weights <- 1 / program_distances
+haversine_weights[is.infinite(haversine_weights)] <- 0
+(haversine_moran <- morani(relevant_oh_data$Minimum.Hours.Imputed, haversine_weights))
+```
+And significance testing:
+
+```{r}
+spatial_continuous_mc <- function(data, trials = 1000) {
+  haversine_weights <- 1 / program_distances
+  haversine_weights[is.infinite(haversine_weights)] <- 0
+  
+  empirical_distribution <- c()
+  for (trail_ix in 1:trials) {
+    resampled_outcome <- sample(data$Minimum.Hours.Imputed, nrow(data), replace=TRUE)
+    moran_resampled <- morani(resampled_outcome, haversine_weights)
+    empirical_distribution <- c(empirical_distribution, moran_resampled)
+  }
+  
+  empirical_distribution
+}
+
+haversine_null <- spatial_continuous_mc(relevant_oh_data)
+data.frame(moran_i = haversine_null) %>%
+ggplot() +
+  geom_histogram(aes(moran_i)) +
+  geom_vline(xintercept = haversine_moran) + 
+  xlab("Moran's I") +
+  ggtitle("Spatial Autocorrelation: Monte Carlo Null Distribution vs. Observed")
+```
+
+```{r}
+1 - sum(haversine_null < haversine_moran) / length(haversine_null)
+```
+
+
+There is certainly significance (p=.006).
+
+Visually the programs required hours against distance weighted mean of observation hours:
+
+```{r}
+continuous_means <- c()
+for (ix in 1:nrow(nn)) {
+  continuous_means <- c(continuous_means, mean(program_distances[ix,] * relevant_oh_data$Minimum.Hours.Imputed))
+}
+
+relevant_oh_data$continuous_mean <- continuous_means
+ggplot(relevant_oh_data, aes(Minimum.Hours.Imputed, continuous_means)) +
+  geom_jitter() +
+  geom_smooth(method='lm') +
+  ylab('Distance weighted required hours')
+```
+
+Interpretation of this visual is less intuitive.
+
+More importantly, this test does not align with nearly as plausible of a hypothesis: that programs look at a discrete set of nearby programs to determine their own hours (see Nearest Neighbors section).
 
 ### Program Density Estimation
 
-Are required number of hours tied to geographic program density? One hypothesis is that increased program density correlates with descreased availability of student openings.
+Are required number of hours tied to geographic program density? One hypothesis is that increased program density correlates with descreased availability of student openings in that locale, and hence lower required hours.
 
 ```{r}
 density_estimate_grid <- kde2d(oh_data$Longitude, oh_data$Latitude, n=100)
@@ -309,88 +495,11 @@ oh_data$density_estimate <- predict(density_estimate, oh_data)
 ggplot(oh_data, aes(density_estimate, log(Minimum.Hours.Imputed))) +
   geom_point() +
   geom_smooth(method='lm')
-cor.test(oh_data$Minimum.Hours.Imputed, oh_data$density_estimate, 
-         use="complete.obs", alternative = "less", method="spearman")
-
-points <- expand.grid(
-  Latitude = seq(box$min_lat, box$max_lat, by = .1),
-  Longitude = seq(box$min_long, box$max_long, by = .1)
-) %>%
-  filter(point.in.polygon(Longitude, Latitude, usa$long, usa$lat) > 0)
-
-points$dw <-predict(density_estimate, points)
-
-ggplot(points) +
-  geom_raster(aes(x = Longitude, y = Latitude, fill = density_estimates), interpolate = TRUE) +
-  geom_polygon(data = us, aes(x=long, y = lat, group = group), fill=NA, color='black') + 
-  scale_fill_distiller(palette=1, direction=1) + 
-  guides(fill=guide_colorbar(title='Required Hours',
-                             barwidth = 2, barheight = 20, 
-                             title.theme=element_text(size=15), 
-                             label.theme = element_text(size=20),
-                             draw.ulim = FALSE, draw.llim = TRUE)) +
-  ggtitle('PTCAS Program Density (KDE)') +
-  theme(plot.title = element_text(size=30),
-        axis.text=element_text(size=20),
-        axis.title=element_text(size=20),
-        axis.line=element_blank(),axis.text.x=element_blank(),
-        axis.text.y=element_blank(),axis.ticks=element_blank(),
-        axis.title.x=element_blank(),
-        axis.title.y=element_blank(),
-        panel.background=element_blank(),panel.border=element_blank(),panel.grid.major=element_blank(),
-        panel.grid.minor=element_blank(),plot.background=element_blank())
 ```
-
 
 ```{r}
-# using actual county population
-library(sp)
-library(maps)
-library(maptools)
-library(noncensus)
-data(county.fips)
-data(counties)
-
-counties_clean <- counties %>%
-  mutate(fips = sprintf("%d%s", as.integer(as.character(state_fips)), as.character(county_fips)))
-county_fips_clean <- county.fips %>%
-  mutate(
-    fips = as.character(fips)
-  )
-
-# The single argument to this function, pointsDF, is a data.frame in which:
-#   - column 1 contains the longitude in degrees (negative in the US)
-#   - column 2 contains the latitude in degrees
-
-latlon_to_populations <- function(pointsDF) {
-    countyCentroids <- map('county', fill=TRUE, col="transparent", plot=FALSE)
-    IDs <- sapply(strsplit(countyCentroids$names, ":"), function(x) x[1])
-    counties_sp <- map2SpatialPolygons(countyCentroids, IDs=IDs,
-                     proj4string=CRS("+proj=longlat +datum=WGS84"))
-
-    # Convert pointsDF to a SpatialPoints object 
-    pointsSP <- SpatialPoints(pointsDF, 
-                    proj4string=CRS("+proj=longlat +datum=WGS84"))
-
-    # Use 'over' to get _indices_ of the Polygons object containing each point 
-    indices <- over(pointsSP, counties_sp)
-
-    # Return the county names of the Polygons object containing each point
-    data.frame(county_name = sapply(counties_sp@polygons, function(x) x@ID)[indices],
-                              stringsAsFactors = FALSE) %>%
-      left_join(county_fips_clean, by = c('county_name' = 'polyname')) %>%
-      left_join(counties_clean, by = c('fips' = 'fips')) %>%
-      pull(population)
-}
-
-testPoints <- data.frame(x = c(-90, -120), y = c(44, 44))
-
-pops <- latlon_to_populations(oh_data %>% select(Longitude, Latitude))
-oh_data$population <- pops
-
-ggplot(oh_data) +
-  geom_point(aes(log(population), Minimum.Hours.Imputed))
-
-m <- lm(log(Minimum.Hours.Imputed) ~ Latitude*Longitude + density_estimate + population, oh_data)
-summary(m)
+cor.test(oh_data$Minimum.Hours.Imputed, oh_data$density_estimate, 
+         use="complete.obs", alternative = "less", method="spearman")
 ```
+
+The trend is possibly there (weak significance, at p=.06), and the scatter plot shows that the effect size is small (< 5 hours variation across the full range of program density values).
