@@ -80,7 +80,7 @@ oh_data <- data %>%
 ```
 
 # About
-We are studying the question of how PT programs' observation hours for prospective students vary with location. This is inclusive 
+We are studying the question of how US-based PT programs' observation hours for prospective students vary with geographic location.
 
 # Dataset
 The dataset was sourced from the [PTCAS website](http://aptaapps.apta.org/ptcas/observationhours.aspx) (for requirements) & [Google Maps](https://google.com/maps) (for program locations). It has the following shape:
