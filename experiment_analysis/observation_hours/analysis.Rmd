@@ -67,28 +67,27 @@ categories <- data.frame(
   )
 )
 
-# TODO this drops a program which doesn't have a category currently
 oh_data <- data %>% 
   inner_join(categories, by=c('Category' = 'id')) %>%
-  filter(Longitude < -50 & Latitude > 20) %>% # TODO filtering these non-Americas for now
+  #filter(Longitude < -50 & Latitude > 20) %>% # TODO filtering these non-Americas for now
   mutate(
     Recommended.Hours = parse_recommended_hours(Recommended.Hours)
   ) %>%
   mutate(
-    Minimum.Hours.Imputed = ifelse(is.na(Minimum.Hours) | Minimum.Hours == 0, Recommended.Hours, Minimum.Hours)
+    criterion_hours = ifelse(is.na(Minimum.Hours) | Minimum.Hours == 0, Recommended.Hours, Minimum.Hours)
   )
 ```
 
 # About
-We are studying the question of how US-based PT programs' observation hours for prospective students vary with geographic location.
+We are studying the question of how US-based PT programs' required observation hours (henceforth referred to as "criterion hours") for prospective students vary with geographic location.
 
 # Dataset
-The dataset was sourced from the [PTCAS website](http://aptaapps.apta.org/ptcas/observationhours.aspx) (for requirements) & [Google Maps](https://google.com/maps) (for program locations). It has the following shape:
+The dataset was sourced from the [PTCAS website](http://aptaapps.apta.org/ptcas/observationhours.aspx) (for programs & criterion) & [Google Maps](https://google.com/maps) (for program locations). It has the following shape:
 ```{r}
 dim(oh_data)
 ```
 
-meaning there are 243 programs & 7 (really 6) descriptive columns. Previewing it:
+The first row indicates the number of programs (rows) and the later indicates the number of descriptive qualities (columns). Previewing it:
 
 ```{r}
 head(oh_data, n=10)
@@ -102,6 +101,7 @@ Outlining the non-trivial columns:
     * The program doesn't publish an explicit number, in favor of "case by case" consideration. Students should still expect to need to have some hours for acceptance.
 * Recommended.Hours: Optional and potentially different from minimum hours
     * Some programs supply a range (e.g. "400-600"") or lower bounded range (e.g. "100+""). For this analysis, only the lower bound is used.
+* criterion_hours: Same as Minimum.Hours if the program has a requirement, same as Recommended.Hours if the program has a recommendation, and NA if the program has neither.
 * Latitude & Longitude: Approximate (hand selected on map) location of the center of the institution's campus
 
 
@@ -123,34 +123,61 @@ where the categories are:
 categories
 ```
 
-83% of programs require observation hours.
-
-## Required Hours
+## Criterion Hours
+Here's a summary of the number of criterion hours:
 ```{r}
-summary(oh_data$Minimum.Hours)
+summary(oh_data$criterion_hours)
+```
+
+The proportion of programs with criterion hours are:
+```{r}
+sum(!is.na(oh_data$criterion_hours)) / nrow(oh_data)
+```
+
+The proportion of programs with required or highly recommended hours are:
+
+```{r}
+sum(oh_data$Category < 4) / nrow(oh_data)
 ```
 
 The distribution of hours across all programs looks like:
 
 ```{r}
 oh_data %>%
-  filter(!is.na(Minimum.Hours)) %>%
+  filter(!is.na(criterion_hours)) %>%
   ggplot() +
-    geom_histogram(aes(Minimum.Hours), bins = 15)
+    geom_histogram(aes(criterion_hours), bins = 15)
 ```
 
 Peeking at distributions conditioned on the requirement category (specifically 1 & 2, which do impose a requirement):
 
 ```{r}
 oh_data %>%
-  filter(!is.na(Minimum.Hours) & Category %in% c(1,2)) %>%
+  filter(!is.na(criterion_hours) & Category %in% c(1,2)) %>%
   ggplot() +
-    geom_violin(aes(as.factor(Category), Minimum.Hours))
+    geom_violin(aes(as.factor(Category), criterion_hours))
 ```
 
 The distributions are similar, with modes at 40 & 100 hours.
 
+Mean criterion hours:
+```{r}
+mean(oh_data$criterion_hours, na.rm = TRUE)
+```
+
+Standard deviation:
+```{r}
+sd(oh_data$criterion_hours, na.rm = TRUE)
+```
+
 # Incorporating Geography
+
+For analysis, we will only include programs in the contiguous US:
+
+```{r}
+oh_analysis_data <- oh_data %>%
+  filter(Instituition != 'University of Puerto Rico' & Instituition != 'Andrews University')
+```
 
 ## Visualizing
 
@@ -161,16 +188,17 @@ us <- map_data('state')
 usa <- map_data('usa') %>%
   filter(region == 'main')
 
-gg <- oh_data %>%
+gg <- oh_analysis_data %>%
+  filter(!is.na(criterion_hours)) %>%
   ggplot()  +
     geom_polygon(data = us, aes(x=long, y = lat, group = group), fill='grey', color='white') +
-    geom_point(aes(x=Longitude, y=Latitude, color = Minimum.Hours.Imputed), size=10) + 
+    geom_point(aes(x=Longitude, y=Latitude, color = criterion_hours), size=10) + 
     scale_color_distiller(palette=1, direction=1) + 
     guides(color=guide_colorbar(title='Required Hours',
                                barwidth = 2, barheight = 20, 
                                title.theme=element_text(size=15), 
                                label.theme = element_text(size=20))) +
-    ggtitle('PTCAS Program Required Observation Hours') +
+    ggtitle('PTCAS Program Criterion Hours') +
     theme(plot.title = element_text(size=30),
           axis.text=element_text(size=20),
           axis.title=element_text(size=20)) +
@@ -205,9 +233,9 @@ To build a more interprettable visual, we need to:
 RuleFit is a model fitting procedure that identifies "similar" hyperrectangles (2D rectangles, in our case) in the data. Regularization (LASSO) & cross validation are used to fit the model. The final model is selected using the cross validation error minimizing regularization parameter; this is more aggressive (i.e. higher false positive rate) than using the regularization parameter within a standard error of the minimum.
 
 ```{r fig.width=15, fig.height=11}
-train_data <- oh_data %>%
-  filter(!is.na(Minimum.Hours.Imputed))
-model <- xrf(Minimum.Hours.Imputed ~ Latitude + Longitude, 
+train_data <- oh_analysis_data %>%
+  filter(!is.na(criterion_hours))
+model <- xrf(criterion_hours ~ Latitude + Longitude, 
              train_data, 
              family = 'gaussian',
              xgb_control = list(nrounds = 5, max_depth = 2),
@@ -223,7 +251,7 @@ box <- us %>%
 points <- expand.grid(
   Latitude = seq(box$min_lat, box$max_lat, by = .1),
   Longitude = seq(box$min_long, box$max_long, by = .1),
-  Minimum.Hours.Imputed = -1 # https://github.com/holub008/xrf/issues/9
+   criterion_hours = -1 # https://github.com/holub008/xrf/issues/9
 ) %>%
   filter(point.in.polygon(Longitude, Latitude, usa$long, usa$lat) > 0)
 
@@ -238,7 +266,7 @@ ggplot(points) +
                              title.theme=element_text(size=15), 
                              label.theme = element_text(size=20),
                              draw.ulim = FALSE, draw.llim = TRUE)) +
-  ggtitle('PTCAS Program Required Observation Hours By Geography') +
+  ggtitle('PTCAS Program Criterion Hours By Geography') +
   theme(plot.title = element_text(size=30),
         axis.text=element_text(size=20),
         axis.title=element_text(size=20),
@@ -251,7 +279,7 @@ ggplot(points) +
 
 ```
 
-There certainly appears to be a trend of decreasing hours as Longitude increases (moving towards the East). There appears to be pockets of (regionally) high requirements in the LA area & the "central" east coast, while New England is a pocket of particularly low requirements.
+There certainly appears to be a trend of decreasing criterion hours as Longitude increases (moving towards the East). There appears to be pockets of (regionally) high criterion in the LA area & the "central" east coast, while New England is a pocket of particularly low criterion
 
 ## Correlations
 
@@ -261,35 +289,35 @@ There certainly appears to be a trend of decreasing hours as Longitude increases
 To visualize main effect correlations, we look at marginal x/y plots of latitude and longitude. Smoothing splines are used to trend the data.
 
 ```{r message=FALSE}
-oh_data %>%
-  filter(!is.na(Minimum.Hours.Imputed)) %>%
-  ggplot(aes(Latitude, log(Minimum.Hours.Imputed))) +
+oh_analysis_data %>%
+  filter(!is.na(criterion_hours)) %>%
+  ggplot(aes(Latitude, log(criterion_hours))) +
     geom_point() +
-    geom_smooth()
+    geom_smooth(method='lm')
 ```
 
-Hours look pretty flat across Latitude, with perhaps a slight decrease moving North.
+Criterion hours look pretty flat across Latitude, with perhaps a slight decrease moving North.
 
 ```{r message=FALSE}
-oh_data %>%
-  filter(!is.na(Minimum.Hours.Imputed)) %>%
-  ggplot(aes(Longitude, log(Minimum.Hours.Imputed))) +
+oh_analysis_data %>%
+  filter(!is.na(criterion_hours)) %>%
+  ggplot(aes(Longitude, log(criterion_hours))) +
     geom_point() +
     geom_smooth(method="lm")
 ```
-There is a definite decrease in hours moving west to east, with a possible jump upwards at the coast.
+There is a definite decrease in criterion hours moving west to east, with a possible jump upwards at the coast.
 
 #### Inference (Non-zero Effects)
 
 To determine if the main effect correlations are non-zero, we perform a bootstrap on the correlation coefficients, building 95% intervals:
 
 ```{r}
-bs <- bootstrap(oh_data %>% filter(!is.na(Minimum.Hours)), corr_lat = cor(Latitude, Minimum.Hours, method='spearman'), corr_long = cor(Longitude, Minimum.Hours, method='spearman'))
+bs <- bootstrap(oh_analysis_data %>% filter(!is.na(Minimum.Hours)), corr_lat = cor(Latitude, Minimum.Hours, method='spearman'), corr_long = cor(Longitude, Minimum.Hours, method='spearman'))
 
 summary.bootstrap(bs)
 ```
 
-Matching our visual intuition, the Longitude correlation interval certainly does not include 0 (i.e. is a non-zero effect), while Latitude is less convincing (interval does include a 0 correlation). For future analyses, it is extremely likely that these two effects interact (e.g. due to high requirements in the Northeast US).
+Both effects are fairly unconvincing, showing weak strength of relationship and questionable sigificance.
 
 ### Spatial Autocorrelation
 
@@ -318,7 +346,7 @@ morani <- function(x, W) {
 ```
 
 #### Nearest Neighbors
-Here we posit the question: Do programs typically have similar hours to their nearest neighboring programs? We select a parameterization of `k=10` neighboring programs, which is a plausibly small enough set of schools that a program would consider in their own determination, while large enough to likely provide a signal. Distance between programs is simply the shortest distance between the two programs on a globe (Haversine distance).
+Here we posit the question: Do programs typically have similar criterion to their nearest neighboring programs? We select a parameterization of `k=10` neighboring programs, which is a plausibly small enough set of schools that a program would consider in their own determination, while large enough to likely provide a signal. Distance between programs is simply the shortest distance between the two programs on a globe (Haversine distance).
 
 ```{r}
 haversine_distance <- function(lat1, lon1, lat2, lon2) {
@@ -357,14 +385,14 @@ compute_nearest_neighbors <- function(d, k=5) {
   neighbor_graph
 }
 
-relevant_oh_data <- oh_data %>%
-  filter(!is.na(Minimum.Hours.Imputed))
+relevant_oh_data <- oh_analysis_data %>%
+  filter(!is.na(criterion_hours))
 
 program_distances <- compute_pairwise_distances(relevant_oh_data)
 nn <- compute_nearest_neighbors(program_distances, 10)
-(moran_observed <- morani(relevant_oh_data$Minimum.Hours.Imputed, nn))
+(moran_observed <- morani(relevant_oh_data$criterion_hours, nn))
 ```
-Moran's I is calculated as .143; at 216 programs, its expectation under the null is nearly 0. This value, which suggests a positive autocorrelation (programs take similar hours to those programs around them), is quite a bit larger, but how do we assess significance? Monte Carlo simulation will be used to build a null distribution of Moran's I (i.e. the empirical distribution when no autocorrelation exists): 
+Moran's I is calculated as .142; at over 200 programs, its expectation under the null is nearly 0. This value, which suggests a positive autocorrelation (programs take similar criterion to those programs around them), is quite a bit larger, but how do we assess significance? Monte Carlo simulation will be used to build a null distribution of Moran's I (i.e. the empirical distribution when no autocorrelation exists): 
 
 ```{r}
 # Spatial Monte-Carlo: randomly reassign values to points and recompute Moran's I to build null distribution
@@ -374,7 +402,7 @@ spatial_mc <- function(data, trials = 1000) {
   
   empirical_distribution <- c()
   for (trail_ix in 1:trials) {
-    resampled_outcome <- sample(data$Minimum.Hours.Imputed, nrow(data), replace=TRUE)
+    resampled_outcome <- sample(data$criterion_hours, nrow(data), replace=TRUE)
     moran_resampled <- morani(resampled_outcome, nn)
     empirical_distribution <- c(empirical_distribution, moran_resampled)
   }
@@ -402,10 +430,10 @@ To better visualize this correlation, here is a plot of program observation hour
 nn_mean <- c()
 for (ix in 1:nrow(nn)) {
   neighbor_ixs <- which(nn[ix,] > 0)
-  nn_mean <- c(nn_mean, mean(relevant_oh_data[neighbor_ixs, 'Minimum.Hours.Imputed']))
+  nn_mean <- c(nn_mean, mean(relevant_oh_data[neighbor_ixs, 'criterion_hours']))
 }
 relevant_oh_data$nn_mean <- nn_mean
-ggplot(relevant_oh_data, aes(Minimum.Hours.Imputed, nn_mean)) +
+ggplot(relevant_oh_data, aes(criterion_hours, nn_mean)) +
   geom_jitter() +
   geom_smooth(method='lm')
 ```
@@ -413,7 +441,7 @@ ggplot(relevant_oh_data, aes(Minimum.Hours.Imputed, nn_mean)) +
 Notice that the linear model visually suggests a smaller effect than reality, since there are several high leverage points near the max extent of required hours. Moran's I is robust to these high leverage points. Nonetheless, the trend is visually apparent, particularly when the x axis is log-transformed:
 
 ```{r}
-ggplot(relevant_oh_data, aes(log(Minimum.Hours.Imputed), nn_mean)) +
+ggplot(relevant_oh_data, aes(log(criterion_hours), nn_mean)) +
   geom_jitter() +
   geom_smooth(method='lm')
 ```
@@ -425,7 +453,7 @@ Haversine distance can be used to demonstrate the effect of continuous distance 
 # invert, so that nearer programs have higher weight
 haversine_weights <- 1 / program_distances
 haversine_weights[is.infinite(haversine_weights)] <- 0
-(haversine_moran <- morani(relevant_oh_data$Minimum.Hours.Imputed, haversine_weights))
+(haversine_moran <- morani(relevant_oh_data$criterion_hours, haversine_weights))
 ```
 And significance testing:
 
@@ -436,7 +464,7 @@ spatial_continuous_mc <- function(data, trials = 1000) {
   
   empirical_distribution <- c()
   for (trail_ix in 1:trials) {
-    resampled_outcome <- sample(data$Minimum.Hours.Imputed, nrow(data), replace=TRUE)
+    resampled_outcome <- sample(data$criterion_hours, nrow(data), replace=TRUE)
     moran_resampled <- morani(resampled_outcome, haversine_weights)
     empirical_distribution <- c(empirical_distribution, moran_resampled)
   }
@@ -458,18 +486,18 @@ ggplot() +
 ```
 
 
-There is certainly significance (p=.006).
+There is certainly significance, although the result is less strong; this fits the hypothesis that effects are local - downweighting by a linear function of Haversine distance likely doesn't model how little a given program considers the criterion hours of a program across the country. In other words, a nearest neighbor approach more correctly captures how program administrators think about the criterion hours of programs around them.
 
 Visually the programs required hours against distance weighted mean of observation hours:
 
 ```{r}
 continuous_means <- c()
 for (ix in 1:nrow(nn)) {
-  continuous_means <- c(continuous_means, mean(program_distances[ix,] * relevant_oh_data$Minimum.Hours.Imputed))
+  continuous_means <- c(continuous_means, mean(program_distances[ix,] * relevant_oh_data$criterion_hours))
 }
 
 relevant_oh_data$continuous_mean <- continuous_means
-ggplot(relevant_oh_data, aes(Minimum.Hours.Imputed, continuous_means)) +
+ggplot(relevant_oh_data, aes(criterion_hours, continuous_means)) +
   geom_jitter() +
   geom_smooth(method='lm') +
   ylab('Distance weighted required hours')
@@ -477,28 +505,28 @@ ggplot(relevant_oh_data, aes(Minimum.Hours.Imputed, continuous_means)) +
 
 Interpretation of this visual is less intuitive.
 
-More importantly, this test does not align with nearly as plausible of a hypothesis: that programs look at a discrete set of nearby programs to determine their own hours (see Nearest Neighbors section).
+More importantly, this test does not align with nearly as plausible of a hypothesis: that programs look at a discrete set of nearby programs to determine their own criteria (see Nearest Neighbors section).
 
 ### Program Density Estimation
 
-Are required number of hours tied to geographic program density? One hypothesis is that increased program density correlates with descreased availability of student openings in that locale, and hence lower required hours.
+Are criterion hours tied to geographic program density? One hypothesis is that increased program density correlates with descreased availability of student openings in that locale, and hence lower criterion.
 
 ```{r}
-density_estimate_grid <- kde2d(oh_data$Longitude, oh_data$Latitude, n=100)
+density_estimate_grid <- kde2d(oh_analysis_data$Longitude, oh_analysis_data$Latitude, n=100)
 
 gr <- with(density_estimate_grid, data.frame(expand.grid(x,y), as.vector(z)))
 names(gr) <- c("Longitude", "Latitude", "z")
 density_estimate <- loess(z~Longitude*Latitude, data=gr)
 
-oh_data$density_estimate <- predict(density_estimate, oh_data)
+oh_analysis_data$density_estimate <- predict(density_estimate, oh_analysis_data)
 
-ggplot(oh_data, aes(density_estimate, log(Minimum.Hours.Imputed))) +
+ggplot(oh_analysis_data, aes(density_estimate, log(criterion_hours))) +
   geom_point() +
   geom_smooth(method='lm')
 ```
 
 ```{r}
-cor.test(oh_data$Minimum.Hours.Imputed, oh_data$density_estimate, 
+cor.test(oh_analysis_data$criterion_hours, oh_analysis_data$density_estimate, 
          use="complete.obs", alternative = "less", method="spearman")
 ```
 
