@@ -1,6 +1,9 @@
 library(rgdal)
 library(raster)
 library(dplyr)
+library(tidyr)
+library(ggplot2)
+library(rgeos)
 
 preliminary_work <- function() {
   # osm data include trails and lakes
@@ -52,17 +55,53 @@ osm_path <- '/Users/kholub/snippets/national_forests/contours/eagle_mountain_til
 hgt_path <- '/Users/kholub/snippets/national_forests/contours/N47W091.hgt'
 
 em_lakes <- readOGR(osm_path, 'multipolygons')
-em_trails <- readOGR(osm_path , 'lines')
-em_elevation_disk <- raster(hgt_path)
-em_elevation <- as.data.frame(em_elevation_disk, xy=TRUE) %>%
-  filter(x >= extent$xmin & x <= extent$xmax
-         & y >= extent$ymin & y <= extent$ymax) %>%
-  mutate(
-    elevation_meters = N47W091
-  ) %>%
-  dplyr::select(-N47W091)
+em_lines <- readOGR(osm_path , 'lines')
+em_trail <- em_lines[em_lines$name %in% c("Eagle Mountain Hiking Trail"), ] 
+em_elevation_raster <- raster(hgt_path) %>%
+  crop(unlist(extent))
+em_contours <- rasterToContour(em_elevation_raster, nlevels=15)
 
-hist(em_elevation$elevation_meters)
+# making sure the data looks healthy
+plot(em_contours)
+plot(em_trail, add=TRUE, col='green')
+plot(em_lakes, add=TRUE, col='blue')
 
+plot_level <- function(elevation, contours, lakes, trail, plot_extent = extent, min_elevation='560') {
+  relevant_contours <- contours[contours$level == elevation,]
+  
+  plot(relevant_contours,
+       xlim=c(plot_extent$xmin, plot_extent$xmax),
+       ylim=c(plot_extent$ymin, plot_extent$ymax),
+       axes=TRUE,
+       main=elevation)
+  
+  # TODO this is not geopgrahically accurate, since some lakes are at elevation
+  # could derive the heights and include in contours... but there are clearly some accuracy errors in contour
+  # line placement and lake position. so probably best to artistically eyeball
+  if (elevation == min_elevation) {
+    plot(lakes, col = 'blue',
+         xlim=c(plot_extent$xmin, plot_extent$xmax),
+         ylim=c(plot_extent$ymin, plot_extent$ymax),
+         add=TRUE)
+    plot(trail,
+         col = 'green',
+         xlim=c(plot_extent$xmin, plot_extent$xmax),
+         ylim=c(plot_extent$ymin, plot_extent$ymax),
+         add=TRUE)
+  }
+  
+  trail_intersections <- gIntersection(trail, relevant_contours)
+  
+  if (!is.null(trail_intersections)) {
+    plot(trail_intersections, 
+         col='red',
+         lwd=5,
+         add=TRUE)
+  }
+}
 
-
+for (ele in levels(em_contours$level)) {
+  jpeg(paste0("~/eagle_mountain_layers/", ele, ".jpg"), width=1500, height=1500)
+  plot_level(ele, em_contours, em_lakes, em_trail)
+  dev.off()
+}
