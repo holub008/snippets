@@ -73,11 +73,13 @@ plot_level <- function(elevation, contours, lakes, trail, plot_extent = extent, 
        xlim=c(plot_extent$xmin, plot_extent$xmax),
        ylim=c(plot_extent$ymin, plot_extent$ymax),
        axes=TRUE,
+       lwd=5,
        main=elevation)
   
   # TODO this is not geopgrahically accurate, since some lakes are at elevation
-  # could derive the heights and include in contours... but there are clearly some accuracy errors in contour
-  # line placement and lake position. so probably best to artistically eyeball
+  # could derive the heights and include in contours... but there are clearly
+  # some accuracy errors in contour line placement and lake position. so
+  # probably best to artistically eyeball
   if (elevation == min_elevation) {
     plot(lakes, col = 'blue',
          xlim=c(plot_extent$xmin, plot_extent$xmax),
@@ -98,6 +100,10 @@ plot_level <- function(elevation, contours, lakes, trail, plot_extent = extent, 
          lwd=5,
          add=TRUE)
   }
+  
+  axis(side = 1, lwd = 5)
+  axis(side = 2, lwd = 5)
+  box(lwd=5)
 }
 
 for (ele in levels(em_contours$level)) {
