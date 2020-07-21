@@ -128,9 +128,12 @@ def _topic_cluster(documents):
 writer = pd.ExcelWriter(f'./outputs/response_topic_clusters.xlsx', engine='xlsxwriter')
 for col in data.columns:
     analyzable_text = data[~pd.isnull(data[col])][col].tolist()
-    clusters = [c['topic'] for c in _topic_cluster(analyzable_text)]
+    tc = _topic_cluster(analyzable_text)
+    clusters = [c['topic'] for c in tc]
+    cluster_sizes = [len(c['study_ids']) for c in tc]
     df = pd.DataFrame({
-        'topic': clusters
+        'topic': clusters,
+        'number_of_responses': cluster_sizes,
     })
     df.to_excel(writer, sheet_name=col[0:31], index=False)
 
