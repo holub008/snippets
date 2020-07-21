@@ -12,6 +12,7 @@ nltk = "*"
 scikit-learn = "*"
 xlrd = "*"
 xlsxwriter = "*"
+lxml = "*"
 
 [requires]
 python_version = "3.8"
