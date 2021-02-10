@@ -1,0 +1,94 @@
+---
+title: "Are MN Nordic Ski Sections Unfair?"
+author:
+- Karl Holub <karljholub@gmail.com>
+output:
+  html_document:
+    df_print: paged
+---
+```{r setup, include=FALSE, echo=FALSE}
+library(dplyr)
+library(tidyr)
+library(ggplot2)
+
+girls <- read.csv('./girls_2020.csv') %>%
+  mutate(
+    TEAM = ifelse(TEAM == 'St. Paul Academy', 'St Paul Academy', TEAM) # just for name alignment with boys
+  )
+boys <-read.csv('./boys_2020.csv')
+sections <- read.csv('./sections.csv')
+```
+# About
+The MSHSL splits high schools into "sections" roughly corresponding to co-location. For the biggest race of the year, the state meet, a select number of skiers, 20 per section across 8 sections, are invited to the state meet. State qualifiers are determined at an annual Sections meet. Qualifiers are comprised of two teams of 7 skiers, and 6 individuals. Teams are scored by their top 4 skiers (why 7 are brought to the state meet is... irrational, but a topic for another day), and the two teams with the highest scores qualify all 7 team members. Substracting these 14 skiers, the next best 6 individual skiers (from any team) are qualified.
+
+Skiers work hard to qualify for the state meet. Do some skiers have an easier path to the state meet than others, due simply to their section assignment (geographic location)? Life usually isn't fair, let's prove it!
+
+## Data
+I pulled [2020 state meet data](https://www.skinnyski.com/racing/highschool/2020/statemeet-expanded.pdf) from SkinnySki.com, and [sections data](https://old.mshsl.org/sections/list.asp) from the MSHSL.
+
+Here's the data:
+```{r}
+girls
+boys
+sections
+```
+
+To demonstrate that every skier is assigned a section:
+```{r}
+anti_join(boys, sections, by=c('TEAM' = 'school')) %>%
+  select(TEAM) %>%
+  unique()   
+
+anti_join(girls, sections, by=c('TEAM' = 'school')) %>%
+  select(TEAM) %>%
+  unique() 
+```
+
+## State Meet Placement by Section
+Now we run some quick stats on the state meet finishing place of skiers in each section:
+
+```{r}
+section_boys <- inner_join(boys, sections, by=c('TEAM' = 'school'))
+section_girls <- inner_join(girls, sections, by=c('TEAM' = 'school'))
+
+ggplot(section_boys) +
+  geom_boxplot(aes(as.factor(section), PLACE)) +
+  xlab('Section') +
+  ylab('Skier Placement') +
+  ggtitle('2020 Nordic State Meet - Boys Pursuit')
+```
+
+```{r}
+ggplot(section_girls) +
+  geom_boxplot(aes(as.factor(section), PLACE)) +
+  xlab('Section') +
+  ylab('Skier Placement') +
+  ggtitle('2020 Nordic State Meet - Girls Pursuit')
+```
+
+It appears that section 4 is generally the hardest section, with section 6 the easiest. The above box plots show the IQR, so we can make statement that the 25th percentile state qualifier from section 4 is about equivalent to the 75th percentile skier from section 6.
+
+Below is a table of average ranks among all qualifiers from a section, and the average among the most competitive (top half) qualifiers from a section. Approximately the same story holds.
+
+```{r warning=FALSE, message = FALSE}
+top_half_mean <- function(v) {
+  sorted_v <- sort(v)
+  mean(v[1:(length(v)/2)])
+}
+
+section_boys %>%
+  group_by(section) %>%
+  summarize(
+    racers = n(),
+    average_rank = mean(PLACE),
+    top_half_rank = top_half_mean(PLACE)
+  )
+
+section_girls %>%
+  group_by(section) %>%
+  summarize(
+    racers = n(),
+    average_rank = mean(PLACE),
+    top_half_rank = top_half_mean(PLACE)
+  )
+```

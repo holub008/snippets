@@ -1,0 +1,84 @@
+,Place,Bib,Name,Grad,e Team,Classic,Skate,Both,Pts,State
+0,1,201,Cooper Lennox,12,Mora,12:24,11:14.8,23:38.8,100,IND
+1,2,202,Cj Young,12,Maple Grove,12:55,11:28.4,24:23.4,99,TEA
+2,3,203,Nicholas Kjome,12,Osseo,13:16,11:52.4,25:08.4,98,IND
+3,4,204,Myles Brown,10,Maple Grove,13:30,11:55.2,25:25.2,97,TEA
+4,5,205,Jack Nightingale,12,Champlin Park,13:38,11:47.2,25:25.2,96,TEA
+5,6,207,Mark Scheller,12,Champlin Park,13:46,11:46.7,25:32.7,95,TEA
+6,7,210,Connor Preston,12,Champlin Park,13:56,11:52.9,25:48.9,94,TEA
+7,8,206,Nicholas Trzynka,11,Osseo,13:40,12:09.5,25:49.5,93,IND
+8,9,213,Ben Lewis,9,Blaine,14:04,11:51.6,25:55.6,92,IND
+9,10,209,Parker Koland,10,Maple Grove,13:50,12:06.3,25:56.3,91,TEA
+10,11,208,Jadon Purcell,12,Elk River/zimmerman,13:48,12:13.7,26:01.7,90,IND
+11,12,211,Josh Thoen,10,Coon Rapids,14:00,12:07.4,26:07.4,89,IND
+12,13,218,Charlie Caven,12,Maple Grove,14:14,12:08.4,26:22.4,88,TEA
+13,14,214,Zachary Oldroyd,12,Champlin Park,14:05,12:20.8,26:25.8,87,TEA
+14,15,215,Milo Keyes,10,Spring Lake Park/st,14:07,12:19.0,26:26.0,86,
+15,16,217,Calvin Fiala,11,Andover,14:09,12:20.2,26:29.2,85,
+16,17,216,Sam Fjellman,12,Maple Grove,14:07,12:22.5,26:29.5,84,TEA
+17,18,221,Tommy Mulford,10,Mora,14:28,12:23.5,26:51.5,83,
+18,19,219,Nathan Smith,12,Blaine,14:17,12:38.1,26:55.1,82,
+19,20,226,Vaughn Ruska,11,Osseo,14:47,12:33.2,27:20.2,81,
+20,21,223,Miles Olofson,12,Elk River/zimmerman,14:42,12:38.7,27:20.7,80,
+21,22,220,Henry Brooks,11,Spring Lake Park/st,14:26,13:02.5,27:28.5,79,
+22,23,238,Jared Heida,12,Coon Rapids,15:07,12:25.3,27:32.3,78,
+23,24,242,Joseph Eisenberg,12,Champlin Park,15:16,12:16.9,27:32.9,77,TEA
+24,25,224,Matthew Broderson,9,Maple Grove,14:42,12:51.5,27:33.5,76,TEA
+25,26,230,Noah Chrisitiansen,12,Coon Rapids,14:58,12:36.7,27:34.7,75,
+26,27,233,Josh Reed,12,Park Center,15:01,12:39.4,27:40.4,74,
+27,28,235,Micah Hanson,11,Anoka,15:02,12:39.5,27:41.5,73,
+28,29,236,Keegan Poston,10,Champlin Park,15:04,12:42.8,27:46.8,72,TEA
+29,30,222,Eliott Swanson,9,Elk River/zimmerman,14:37,13:11.4,27:48.4,71,
+30,31,231,Myles Gilyard,12,Coon Rapids,14:59,12:49.4,27:48.4,70,
+31,32,234,Kirk Carlson,10,Maple Grove,15:01,13:01.7,28:02.7,69,TEA
+32,33,232,Trevor Larson,11,Anoka,15:01,13:02.3,28:03.3,68,
+33,34,225,Lucas Liabraaten,10,Anoka,14:46,13:19.1,28:05.1,67,
+34,35,239,Collin Lief,10,Spring Lake Park/st,15:08,13:02.3,28:10.3,66,
+35,36,246,Alex Heidorn,11,Rogers,15:24,12:47.8,28:11.8,65,
+36,37,212,Blake Weiss,12,Andover,14:01,14:10.9,28:11.9,64,
+37,38,228,Gavin Kane,10,Blaine,14:54,13:18.1,28:12.1,63,
+38,39,229,Hayden O'Connor,11,Rogers,14:58,13:20.4,28:18.4,62,
+39,40,227,Kyle Ostendorf,11,Champlin Park,14:47,13:39.1,28:26.1,61,TEA
+40,41,253,Cole Beattie,11,Park Center,15:33,12:53.7,28:26.7,60,
+41,42,250,Joel Nathe,12,Park Center,15:28,12:59.1,28:27.1,59,
+42,43,248,Owen Erickson,11,Spring Lake Park/st,15:27,13:02.8,28:29.8,58,
+43,44,245,Ryan Davis,11,Rogers,15:22,13:09.2,28:31.2,57,
+44,45,251,Matthew Binsfeld,10,Elk River/zimmerman,15:28,13:03.7,28:31.7,56,
+45,46,240,Zethan Schultz,9,Mora,15:15,13:20.4,28:35.4,55,
+46,47,244,Art Duncan,10,Spring Lake Park/st,15:22,13:14.2,28:36.2,54,
+47,48,237,Peyton Martinek,9,Coon Rapids,15:06,13:33.6,28:39.6,53,
+48,49,247,Andy Huber,10,Rogers,15:26,13:19.5,28:45.5,52,
+49,50,256,Cameron Horst,11,Blaine,15:43,13:02.9,28:45.9,51,
+50,51,257,Dane Halverson,11,Mora,15:44,13:09.8,28:53.8,50,
+51,52,249,Ryan Powley,10,Coon Rapids,15:28,13:26.0,28:54.0,49,
+52,53,260,Jonathan Christianson,12,Park Center,15:49,13:07.4,28:56.4,48,
+53,54,241,Alex Reshetar,12,Rogers,15:15,13:43.6,28:58.6,47,
+54,55,254,Nick Manthei,10,Rogers,15:38,13:21.5,28:59.5,46,
+55,56,262,Joseph Reshetar,12,Rogers,16:04,13:01.0,29:05.0,45,
+56,57,252,Isaac Sorvari,11,Blaine,15:32,13:35.6,29:07.6,44,
+57,58,258,Hunter Honstrom,12,Mora,15:48,13:33.1,29:21.1,43,
+58,59,243,Logan Meinert,11,Andover,15:17,14:14.6,29:31.6,42,
+59,60,259,Wilson Rabe,11,Blaine,15:48,13:43.9,29:31.9,41,
+60,61,261,Tyler Nosko,10,Anoka,15:50,13:47.3,29:37.3,40,
+61,62,255,Calvin Artman,12,Elk River/zimmerman,15:42,14:14.9,29:56.9,39,
+62,63,265,Aaron Casey,9,Coon Rapids,16:22,13:42.1,30:04.1,38,
+63,64,263,Nick Becker,10,Anoka,16:04,14:04.6,30:08.6,37,
+64,65,271,Declan Goddard,10,Anoka,16:52,13:31.7,30:23.7,36,
+65,66,267,Connor Greeler,11,Anoka,16:32,13:52.4,30:24.4,35,
+66,67,272,Jacob Johnson,11,Mora,16:54,13:41.7,30:35.7,34,
+67,68,266,Aidan McKeefry,10,Andover,16:23,14:18.5,30:41.5,33,
+68,69,264,Collin Lay,10,Spring Lake Park/st,16:13,14:32.7,30:45.7,32,
+69,70,268,Jeremy Davie,12,Andover,16:41,14:05.3,30:46.3,31,
+70,71,270,Sawyer Smith,9,Mora,16:48,14:05.5,30:53.5,30,
+71,72,273,Cohen Janes,11,Spring Lake Park/st,17:09,14:39.1,31:48.1,29,
+72,73,276,Ben Barnett,11,Blaine,17:24,14:29.5,31:53.5,28,
+73,74,269,Nate Courchane,11,Park Center,16:45,15:20.6,32:05.6,27,
+74,75,274,Nick Donner,10,Andover,17:14,14:51.9,32:05.9,26,
+75,76,275,Colin Vaughn,9,Osseo,17:18,14:53.0,32:11.0,25,
+76,77,277,Aj Miller,9,Osseo,17:32,14:49.2,32:21.2,24,
+77,78,278,Henry Laborde,11,Osseo,17:46,14:43.6,32:29.6,23,
+78,79,283,Reid Binsfeld,8,Elk River/zimmerman,18:23,14:26.3,32:49.3,22,
+79,80,280,Gavin Neubauer,10,Elk River/zimmerman,17:53,14:56.8,32:49.8,21,
+80,81,281,Garrett Nelson,12,Park Center,17:55,14:54.8,32:49.8,20,
+81,82,279,Drew Paape,9,Park Center,17:48,15:03.1,32:51.1,19,
+82,83,282,Gabriel Arends,9,Osseo,18:09,14:54.0,33:03.0,18,

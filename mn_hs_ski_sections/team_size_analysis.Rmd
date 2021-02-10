@@ -1,0 +1,113 @@
+---
+title: "The Absurdity of Team Qualification"
+author:
+  - Karl Holub <karljholub@gmail.com>
+output:
+html_document:
+df_print: paged
+---
+  ```{r setup, include=FALSE, echo=FALSE}
+library(dplyr)
+library(tidyr)
+library(ggplot2)
+
+compute_team_ranks <- function(data) {
+  data %>%
+    group_by(TEAM) %>%
+    mutate(
+      team_rank = rank(PLACE),
+      team_size = n()
+    ) %>%
+    mutate(
+      team_rank = ifelse(team_size > 4, team_rank, NA)
+    ) %>%
+    ungroup()
+}
+
+girls <- read.csv('./girls_2020.csv') %>%
+  mutate(
+    TEAM = ifelse(TEAM == 'St. Paul Academy', 'St Paul Academy', TEAM) # just for name alignment with boys
+  ) %>%
+  compute_team_ranks()
+boys <-read.csv('./boys_2020.csv') %>%
+  compute_team_ranks()
+sections <- read.csv('./sections.csv')
+```
+# About
+In Nordic Skiing, 2 teams per section qualify for the state meet, each team bringing 7 skiers. Only 4 skiers are scored at sections and state meets. This means each team carries 3 skiers that won't score at the state meet; how "qualified" are these qualifiers?
+
+I posit that, on average, these bottom 3 team qualifiers are generally near the bottom of the state meet. Critically, they take qualifications from more deserving individual skiers. That is not to say some teams don't have the depth to potentially score any of their top 7 - just that *most* do not.
+
+## Approach
+I'm looking to show two things:
+
+* Team qualifiers 5 through 7 are overwhelmingly at the bottom of the field at the state meet
+* There are many skiers at sections that would outski these qualifiers
+
+Both of which imply that changes to qualification may improve fairness and competitiveness of the state meet.
+  
+## Data
+I pulled [2020 state meet data](https://www.skinnyski.com/racing/highschool/2020/statemeet-expanded.pdf) and data fom every sections meet from [SkinnySki.com](skinnyski.com).
+
+## Where do 5-7 qualifiers place overall?
+Below we investigate how team qualifiers placed overall. For the heatmaps, each bar in the chart is a skier. The color of the bar is the rank of the skier on their team; darker blue colors represent lower team placement, while grey indicates an individual qualifier.
+
+### Boys
+```{r}
+ggplot(boys, aes(PLACE, 1, fill= team_rank)) + 
+  geom_tile() +
+  scale_fill_gradient(low = "#56B1F7", high = "#132B43") +
+  theme(axis.title.y=element_blank(),
+        axis.text.y=element_blank(),
+        axis.ticks.y=element_blank()) +
+  xlab('Overall Place') +
+  labs(fill="Team Place") +
+  ggtitle('2020 Boys State Meet - Overall Placement of Team Qualifiers')
+```
+
+In general, individual qualifiers and high team qualifiers fill the front ofthe field, while the 5-7 team qualifiers pack the back. In fact, the *bottom 20 skiers in this meet were entirely 5-7 team qualifiers*. Tabulating average overall placement by team placement:
+
+```{r}
+boys %>%
+  filter(!is.na(team_rank)) %>%
+  mutate(
+    `Team Rank` = team_rank
+  ) %>%
+  group_by(`Team Rank`) %>%
+  summarize(
+    `Average Overall Placement` = mean(PLACE),
+  )
+```
+The 5th team qualifier averaged 108th place in the state meet.
+
+### Girls
+
+```{r}
+ggplot(girls, aes(PLACE, 1, fill= team_rank)) + 
+  geom_tile() +
+  scale_fill_gradient(low = "#56B1F7", high = "#132B43") +
+  theme(axis.title.y=element_blank(),
+        axis.text.y=element_blank(),
+        axis.ticks.y=element_blank()) +
+  xlab('Overall Place') +
+  labs(fill="Team Place") +
+  ggtitle('2020 Girls State Meet - Overall Placement of Team Qualifiers')
+```
+The girls show a little more spread, but again, the back end of the field is predominantly 5-7 qualifiers. Tabulating average overall placement by team placement:
+
+```{r}
+girls %>%
+  filter(!is.na(team_rank)) %>%
+  mutate(
+    `Team Rank` = team_rank
+  ) %>%
+  group_by(`Team Rank`) %>%
+  summarize(
+    `Average Overall Placement` = mean(PLACE),
+  )
+```
+
+Similar to the boys, the 5th team qualifier averaged 108th place.
+
+## Could 5-7 team qualifiers be replaced by individual qualifiers?
+

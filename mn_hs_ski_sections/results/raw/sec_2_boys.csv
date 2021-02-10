@@ -1,0 +1,69 @@
+,Place,Bib,Name,Grade,Team,Classic,Skate,Both,Pts,State
+0,1,202,Victor Sparks,11,Minneapolis Southwe,12:36,11:18.2,23:54.2,100.0,TEA
+1,2,201,Jacob Rochell-Share,12,Minneapolis Southwe,12:28,11:30.1,23:58.1,99.0,TEA
+2,3,204,Charlie Grabow,12,Minneapolis Southwe,12:53,11:26.1,24:19.1,98.0,TEA
+3,4,205,Zach Spears,12,Eden Prairie,13:05,11:38.9,24:43.9,97.0,IND
+4,5,203,Jonathan Clarke,10,Bloomington Jeffers,12:45,12:08.2,24:53.2,96.0,IND
+5,6,209,Stas Bednarski,11,Minneapolis Southwe,13:34,11:25.4,24:59.4,95.0,TEA
+6,7,208,Cooper Camp,10,Minneapolis Southwe,13:30,11:38.9,25:08.9,94.0,TEA
+7,8,213,Nick Scheller,12,Cha-Chaska,13:47,11:29.5,25:16.5,93.0,IND
+8,9,207,Nico Alexander,10,Washburn,13:26,12:08.9,25:34.9,92.0,TEA
+9,10,211,Isaac Lowenthal Walsh,12,Washburn,13:43,11:56.7,25:39.7,91.0,TEA
+10,11,212,Zev Breen,12,Washburn,13:46,12:00.2,25:46.2,90.0,TEA
+11,12,206,Per Alexander,12,Washburn,13:24,12:23.6,25:47.6,89.0,TEA
+12,13,218,Eli Frenkel,11,Edina,13:58,11:51.2,25:49.2,88.0,IND
+13,14,214,Colden Longley,12,Bloomington Jeffers,13:52,12:04.5,25:56.5,87.0,IND
+14,15,215,Austin Hunter,11,Minnetonka,13:54,12:02.6,25:56.6,86.0,IND
+15,16,216,Andrew Defor,9,Edina,13:55,12:26.9,26:21.9,85.0,
+16,17,217,Thomas Graupmann,12,Minnetonka,13:55,12:27.2,26:22.2,84.0,
+17,18,210,Benon Brattebo,9,Eden Prairie,13:40,12:52.1,26:32.1,83.0,
+18,19,220,Owen Lindseth,10,Minneapolis Southwe,14:18,12:18.5,26:36.5,82.0,TEA
+19,20,219,Julian Calder,12,Minnetonka,14:14,12:27.5,26:41.5,81.0,
+20,21,227,Jack Wenz,12,Minneapolis Southwe,14:34,12:16.6,26:50.6,80.0,TEA
+21,22,222,Dylan Green,12,Minnetonka,14:23,12:30.2,26:53.2,79.0,
+22,23,221,Derek Wendland,12,Cha-Chaska,14:20,12:33.9,26:53.9,78.0,
+23,24,223,Ben Scheller,11,Cha-Chaska,14:25,12:41.8,27:06.8,77.0,
+24,25,225,Tyler Franck,12,Holy Family Catholi,14:31,12:40.8,27:11.8,76.0,
+25,26,226,Aj Hemink,10,Minnetonka,14:31,12:45.6,27:16.6,75.0,
+26,27,224,Emerson Roy,12,Washburn,14:29,13:01.8,27:30.8,74.0,TEA
+27,28,228,Alex Bion,12,Washburn,14:40,12:58.5,27:38.5,73.0,TEA
+28,29,229,Zachary Skinner,11,Bloomington Jeffers,14:48,12:51.0,27:39.0,72.0,
+29,30,231,Hari Chidambaram,11,Minnetonka,14:57,12:57.3,27:54.3,71.0,
+30,31,230,Zach Long,12,Cha-Chaska,14:48,13:14.3,28:02.3,70.0,
+31,32,237,Timothy Lueth,12,Bloomington Jeffers,15:21,12:41.7,28:02.7,69.0,
+32,33,234,Nile Timmerman,12,Eden Prairie,15:10,13:06.5,28:16.5,68.0,
+33,34,232,Anthony Hilligoss,10,Eden Prairie,15:03,13:26.3,28:29.3,67.0,
+34,35,238,Bennett Adams,8,Cha-Chaska,15:21,13:15.5,28:36.5,66.0,
+35,36,235,Sam Strickland,10,Washburn,15:11,13:26.2,28:37.2,65.0,TEA
+36,37,236,Henry Schaefer,10,Richfield,15:18,13:26.9,28:44.9,64.0,
+37,38,239,Aj Carroll,12,Minnetonka,15:30,13:18.3,28:48.3,63.0,
+38,39,233,Cole Donahe,10,Cha-Chaska,15:07,13:44.4,28:51.4,62.0,
+39,40,248,Sam Wilmott,11,Cha-Chaska,16:00,13:02.1,29:02.1,61.0,
+40,41,241,Peter Mans,10,Edina,15:36,13:28.8,29:04.8,60.0,
+41,42,243,Padon Kinzley,10,Saint Thomas Academ,15:41,13:29.0,29:10.0,59.0,
+42,43,240,Riley Marble,12,Eden Prairie,15:35,13:36.6,29:11.6,58.0,
+43,44,247,Keaton Mayhew,10,Bloomington Jeffers,15:59,13:14.3,29:13.3,57.0,
+44,45,242,Aidan Ishaug,11,Bloomington Jeffers,15:39,13:36.4,29:15.4,56.0,
+45,46,244,Porter Ball,12,Richfield,15:44,13:32.8,29:16.8,55.0,
+46,47,245,Connor Holm,11,Eden Prairie,15:52,13:44.5,29:36.5,54.0,
+47,48,249,Eric Crosby Lehmann,12,Edina,16:11,13:31.4,29:42.4,53.0,
+48,49,246,Mason Young,10,Bloomington Jeffers,15:58,14:17.6,30:15.6,52.0,
+49,50,251,Case Winter,12,Edina,16:22,14:11.2,30:33.2,51.0,
+50,51,250,Jace Haerter,7,Edina,16:12,14:23.9,30:35.9,50.0,
+51,52,255,Parker Lindstrom,11,Richfield,17:49,13:55.5,31:44.5,49.0,
+52,53,253,Aidan Olsen,12,Holy Family Catholi,17:02,14:56.6,31:58.6,48.0,
+53,54,252,Patrick Ricke,11,Holy Family Catholi,16:29,15:37.6,32:06.6,47.0,
+54,55,257,Micheal O'Donnell,10,Richfield,18:00,14:42.7,32:42.7,46.0,
+55,56,254,Quentin Loxtercamp,11,Edina,17:29,15:22.7,32:51.7,45.0,
+56,57,256,Jack Maplelentz,10,Saint Thomas Academ,17:58,15:02.9,33:00.9,44.0,
+57,58,259,Max Maplelentz,8,Saint Thomas Academ,18:33,15:24.7,33:57.7,43.0,
+58,59,261,Alex Clarity,10,Richfield,18:41,15:31.1,34:12.1,42.0,
+59,60,260,Tommy Hedman,11,Saint Thomas Academ,18:40,15:44.3,34:24.3,41.0,
+60,61,258,Matthew Korf,10,Saint Thomas Academ,18:21,16:12.0,34:33.0,40.0,
+61,62,262,Aidan O'Donnell,11,Holy Family Catholi,19:07,15:52.9,34:59.9,39.0,
+62,63,264,Ben McKinley,9,Saint Thomas Academ,19:27,16:22.3,35:49.3,38.0,
+63,64,263,Owen Lund,11,Holy Family Catholi,19:24,16:36.4,36:00.4,37.0,
+64,65,265,Grant Hayes,10,Holy Family Catholi,20:22,17:02.1,37:24.1,36.0,
+65,66,266,Caden Gilbert,10,Richfield,20:45,17:08.3,37:53.3,35.0,
+66,67,268,Gage Vizecky,11,Richfield,21:52,16:46.6,38:38.6,34.0,
+67,68,267,Luke Geadelmann,10,Holy Family Catholi,20:53,17:31.9,,,

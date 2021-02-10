@@ -26,15 +26,15 @@ for n in [1, 2, 3, 4]:
         vectorizer = StemmedCountVectorizer(ngram_range=[n, n], min_df=.01, analyzer="word", stop_words=stopwords.words('english'))
         analyzable_text = data[~pd.isnull(data[col])][col]
         try:
-            freqs = vectorizer.fit_transform(analyzable_text).todense().sum(axis=0) / len(analyzable_text) * 100
+            freqs = vectorizer.fit_transform(analyzable_text).todense().sum(axis=0)
         except: # general, to catch no words remaining after min_df pruning
             continue
         features = vectorizer.get_feature_names()
-
+        freq_column = f'count ({len(analyzable_text)} total responses)'
         freq_df = pd.DataFrame({
             'phrase': features,
-            'frequency (percent of responses)': freqs.tolist()[0]
-        }).sort_values('frequency (percent of responses)', ascending=False).head(250)
+            freq_column: freqs.tolist()[0]
+        }).sort_values(freq_column, ascending=False).head(250)
         freq_df.to_excel(writer, sheet_name=col[0:31], index=False)
 
     writer.save()
