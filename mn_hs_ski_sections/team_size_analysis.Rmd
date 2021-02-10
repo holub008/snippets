@@ -45,11 +45,11 @@ In no state is high school Nordic skiing healthier than Minnesota. Our state hou
    * The top 2 teams per section qualify for the state meet, each team bringing 7 skiers
    * The top 6 individual skiers not already qualified through a team also qualify
 
-In team scoring, only the 4 best out of the team's 7 skiers are counted. This means each team carries 3 skiers (those ranked 5 to 7 on their team) that won't score at the state meet; how "qualified" are the 5-7 qualifiers? Are they close to scoring for their team? Are they outperforming individual skiers at their sections meets?
+In team scoring, only the 4 best out of the team's 7 skiers are counted. This means each team carries 3 skiers (those ranked 5 to 7 on their team) that won't score at the state meet; how "qualified" are the 5-7 team qualifiers? Are they close to scoring for their team? Are they outperforming individual skiers at their sections meets?
 
 Through 2020 results, we can discover that:
 
-* 5-7 qualifiers place at the bottom of the state meet, below individual qualifiers and most teams' 4th place qualifier. This implies 5-7 qualifiers aren't:
+* 5-7 team qualifiers place at the bottom of the state meet, below individual qualifiers and most teams' 4th place qualifier. This implies 5-7 qualifiers aren't:
     * In contention to change scoring outcomes
     * Increasing the competitiveness of the state meet
 * There are plenty of skiers at sections meets that outperform 5-7 qualifiers but are not rewarded.
@@ -61,7 +61,7 @@ Both of which imply that changes to qualification, in favor of smaller teams and
 
 ## Analysis
 
-### Where do 5-7 qualifiers place at the state meet?
+### Where do 5-7 team qualifiers place at the state meet?
 Below we investigate how team qualifiers placed overall at state. Each bar in the chart is a skier, ordered by state meet placement. The color of the bar is the rank of the skier on their team; darker blue colors represent lower team placement, while grey indicates an individual qualifier.
 
 #### Boys
@@ -71,7 +71,9 @@ ggplot(boys, aes(PLACE, 1, fill= team_rank)) +
   scale_fill_gradient(low = "#56B1F7", high = "#132B43") +
   theme(axis.title.y=element_blank(),
         axis.text.y=element_blank(),
-        axis.ticks.y=element_blank()) +
+        axis.ticks.y=element_blank(),
+        panel.grid.major = element_blank(), 
+        panel.grid.minor = element_blank()) +
   xlab('Overall Place') +
   labs(fill="Team Rank") +
   ggtitle('2020 Boys State Meet - Overall Placement of Team Qualifiers')
@@ -104,7 +106,9 @@ ggplot(girls, aes(PLACE, 1, fill= team_rank)) +
   scale_fill_gradient(low = "#56B1F7", high = "#132B43") +
   theme(axis.title.y=element_blank(),
         axis.text.y=element_blank(),
-        axis.ticks.y=element_blank()) +
+        axis.ticks.y=element_blank(),
+        panel.grid.major = element_blank(), 
+        panel.grid.minor = element_blank()) +
   xlab('Overall Place') +
   labs(fill="Team Rank") +
   ggtitle('2020 Girls State Meet - Overall Placement of Team Qualifiers')
@@ -129,7 +133,7 @@ Similar to the boys, the 5th team qualifier averaged 108th place, which is the b
 
 ### Could 5-7 team qualifiers be replaced by individual qualifiers?
 
-Here we investigate sections meets. We determine bounds on the number of non-qualifying individual skiers outperforming the 5-7 qualifiers. Specifically, placement and time gaps between the last individual qualifier and the 5/6/7 team qualifiers are analyzed. These numbers may go negative (i.e. the 5th team qualifier outperforms individual qualifiers) in sections with deep teams.
+Here we investigate sections meets. We determine bounds on the number of non-qualifying individual skiers outperforming the 5-7 team qualifiers. Specifically, placement and time gaps between the last individual qualifier and the 5/6/7 team qualifiers are analyzed. These numbers may go negative (i.e. the 5th team qualifier outperforms individual qualifiers) in sections with deep teams.
 
 ```{r}
 nonqual_stats <- function(results) {
@@ -253,13 +257,13 @@ bqs %>% summarize_all(mean) %>% select(-Section) %>% kable()
 ## Conclusions
 
 * 5-7 team qualifiers overwhelmingly finish at the bottom of the state meet
-    * The bottom 20 skiers at the 2020 state meet were entirely 5-7 team qualifiers
-* 5-7 team qualifiers are typically unlikely to contribute to point scoring
+    * The bottom 20 skiers at the 2020 boy's State Meet were entirely 5-7 qualifiers
+* 5-7 team qualifiers are unlikely to contribute to point scoring
     * There are, on average, 30-40 places between a team's 4th and 6th place skiers at the state meet
-* There are large numbers of individuals at sections meet who outperform 5-7 team qualifiers but do not qualify for the state meet.
-    * On average 5 individual skiers that fail to qualify out-place the 5th team qualifier, and over 10 skiers failing to qualify out-place the 6th team qualifier. 
+* There are large numbers of individuals at sections meets who outperform 5-7 team qualifiers but do not qualify for the state meet.
+    * On average 5 individual skiers that fail to qualify outperform the 5th team qualifier, and over 10 skiers failing to qualify outperform the 6th team qualifier. 
 
-Occassionally 5th ranked team qualifiers outperform the last individual qualifier. In only one instance (section 4 girls) do 6th ranked team qualifiers also outperform the last individual. These findings indicate that qualifying team size could be shrunk to 5 skiers with little impact on team competitiveness, while bolstering the overall meet competition level.
+Occassionally 5th ranked team qualifier outperforms the last individual qualifier. In only one instance (section 4 girls) do 6th ranked team qualifiers also outperform the last individual. These findings indicate that qualifying team size could be shrunk to 5 skiers with little impact on team competitiveness, while bolstering the State Meet competition level and equitability.
 
 ## Disclaimer
 
