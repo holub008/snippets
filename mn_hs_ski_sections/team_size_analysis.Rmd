@@ -62,41 +62,42 @@ Both of which imply that changes to qualification, in favor of smaller teams and
 ## Analysis
 
 ### Where do 5-7 team qualifiers place at the state meet?
-Below we investigate how team qualifiers placed overall at state. Each bar in the chart is a skier, ordered by state meet placement. The color of the bar is the rank of the skier on their team; darker blue colors represent lower team placement, while grey indicates an individual qualifier.
+A heatmap visualizes the distribution of team qualifiers across the State Meet. Each bar in the chart is a skier, ordered by state meet placement. The color of the bar is the rank of the skier on their team; darker blue colors represent lower ranking within team, while grey indicates an individual qualifier.
 
 #### Boys
 ```{r}
 ggplot(boys, aes(PLACE, 1, fill= team_rank)) + 
   geom_tile() +
   scale_fill_gradient(low = "#56B1F7", high = "#132B43") +
+  scale_x_continuous(breaks= c(1, seq(10, 160, 10))) +
   theme(axis.title.y=element_blank(),
         axis.text.y=element_blank(),
         axis.ticks.y=element_blank(),
         panel.grid.major = element_blank(), 
         panel.grid.minor = element_blank()) +
   xlab('Overall Place') +
-  labs(fill="Team Rank") +
+  labs(fill="Rank on Team") +
   ggtitle('2020 Boys State Meet - Overall Placement of Team Qualifiers')
 ```
 
 
-In general, individual qualifiers and high team qualifiers fill the front of the field, while the 5-7 team qualifiers fill the back. In fact, the **bottom 20 skiers in this meet were entirely 5-7 qualifiers**. Tabulating average overall placement by team placement:
+In general, individual qualifiers and high team qualifiers fill the front of the field, while the 5-7 team qualifiers fill the back. In fact, the **bottom 20 skiers in this meet were entirely 5-7 qualifiers**. Comparing average overall place with ranking within team:
 
 
 ```{r}
 boys %>%
   filter(!is.na(team_rank)) %>%
   mutate(
-    `Team Rank` = team_rank
+    `Rank on Team` = team_rank
   ) %>%
-  group_by(`Team Rank`) %>%
+  group_by(`Rank on Team`) %>%
   summarize(
-    `Average Overall Placement` = mean(PLACE),
+    `Average Overall Place` = mean(PLACE),
   ) %>%
   kable()
 ```
 
-The 5th team qualifier averaged 108th place in the state meet, which is the bottom 31% of the field. The 6th team qualifier averaged bottom 19% of the field. Yet, these numbers still lend a generous perspective, since the bottom of the field is almost entirely populated by other 5-7 qualifiers.
+5th ranked team qualifiers averaged 108th place in the state meet, which is the bottom 31% of the field. The 6th ranked team qualifier averaged bottom 19% of the field.
 
 #### Girls
 
@@ -104,36 +105,37 @@ The 5th team qualifier averaged 108th place in the state meet, which is the bott
 ggplot(girls, aes(PLACE, 1, fill= team_rank)) + 
   geom_tile() +
   scale_fill_gradient(low = "#56B1F7", high = "#132B43") +
+  scale_x_continuous(breaks= c(1, seq(10, 160, 10))) +
   theme(axis.title.y=element_blank(),
         axis.text.y=element_blank(),
         axis.ticks.y=element_blank(),
         panel.grid.major = element_blank(), 
         panel.grid.minor = element_blank()) +
   xlab('Overall Place') +
-  labs(fill="Team Rank") +
+  labs(fill="Rank on Team") +
   ggtitle('2020 Girls State Meet - Overall Placement of Team Qualifiers')
 ```
 
-The girls show a similar trend as the boys, with the back end of the field predominated by 5-7 qualifiers. Tabulating average overall placement by team placement:
+The girls show a similar trend as the boys, with the back end of the field predominated by 5-7 qualifiers. Comparing average overall placement with team ranking:
 
 ```{r}
 girls %>%
   filter(!is.na(team_rank)) %>%
   mutate(
-    `Team Rank` = team_rank
+    `Ranking on Team` = team_rank
   ) %>%
-  group_by(`Team Rank`) %>%
+  group_by(`Ranking on Team`) %>%
   summarize(
     `Average Overall Placement` = mean(PLACE),
   ) %>% 
   kable()
 ```
 
-Similar to the boys, the 5th team qualifier averaged 108th place, which is the bottom 32% of the field. The 6th team qualifiers average the bottom 23% of the field.
+Similar to the boys, 5th ranked team qualifiers averaged 108th place, which is the bottom 32% of the field. The 6th ranked team qualifiers average the bottom 23% of the field.
 
 ### Could 5-7 team qualifiers be replaced by individual qualifiers?
 
-Here we investigate sections meets. We determine bounds on the number of non-qualifying individual skiers outperforming the 5-7 team qualifiers. Specifically, placement and time gaps between the last individual qualifier and the 5/6/7 team qualifiers are analyzed. These numbers may go negative (i.e. the 5th team qualifier outperforms individual qualifiers) in sections with deep teams.
+Section meet data is used to find the number of non-qualifying individual skiers that outperformed the 5-7 team qualifiers. Specifically, placement and time gaps between the last individual qualifier and the 5/6/7 team qualifiers are analyzed. These numbers may go negative (i.e. a 5th team qualifier outperforms individual qualifiers) in sections with deep teams.
 
 ```{r}
 nonqual_stats <- function(results) {
@@ -156,7 +158,7 @@ nonqual_stats <- function(results) {
     ) %>%
     group_by(section) %>%
     summarize(
-      `Places between Last Individual and 7th Team Qualifiers` = mean(p7),
+      `Places between Last Individual and 7th Team Qualifiers` = round(mean(p7)),
       `Time between Last Individual and 7th Team Qualifiers (seconds)` = mean(t7)
     ) %>%
     rename(
@@ -183,7 +185,7 @@ nonqual_stats <- function(results) {
     ) %>%
     group_by(section) %>%
     summarize(
-      `Places between Last Individual and 6th Team Qualifiers` = mean(p6),
+      `Places between Last Individual and 6th Team Qualifiers` = round(mean(p6)),
       `Time between Last Individual and 6th Team Qualifiers (seconds)` = mean(t6)
     ) %>%
     rename(
@@ -210,7 +212,7 @@ nonqual_stats <- function(results) {
     ) %>%
     group_by(section) %>%
     summarize(
-      `Places between Last Individual and 5th Team Qualifiers` = mean(p5),
+      `Places between Last Individual and 5th Team Qualifiers` = round(mean(p5)),
       `Time between Last Individual and 5th Team Qualifiers (seconds)` = mean(t5)
     ) %>%
     rename(
@@ -224,20 +226,20 @@ nonqual_stats <- function(results) {
 }
 ```
 #### Boys
-Each column of the below table represents the gap between the last (6th) individual qualifier and a team's 5th/6th/7th qualifier. For example, if in section 1, if the last individual qualifier was 13th overall, and the winning team's 5th ranked skier was 17th, we would show "4" in the table's upper left entry.
+Each column of the below table represents the gap between the last (6th) individual qualifier and a team's 5th/6th/7th qualifier. For example, if in section 1, if the last individual qualifier was 13th overall, and the winning team's 5th ranked qualifier was 17th, the table entry would be "4".
 ```{r}
 bqs <- nonqual_stats(sections_results %>% filter(gender == 'boys')) %>%
   select(Section, `Places between Last Individual and 5th Team Qualifiers`, `Places between Last Individual and 6th Team Qualifiers`, `Places between Last Individual and 7th Team Qualifiers`)
 kable(bqs)
 ```
 
-Sections 3 & 4 show deeper teams, with the 5th ranked team qualifier typically outperforming the lowest individual qualifier. However, the 6th ranked team qualifier is always 5-20 places behind from the last individual.
+Sections 3 & 4 show deeper teams, with the 5th ranked team qualifier typically outperforming the lowest individual qualifier. However, the 6th ranked team qualifier is 5-20 places behind the last individual across all sections.
 
 ```{r}
-bqs %>% summarize_all(mean) %>% select(-Section) %>% kable()
+bqs %>% summarize_all(function(x) round(mean(x))) %>% select(-Section) %>% kable()
 ```
 
-Averaging over all sections, we find that on average, **4 individual skiers that did not make the state meet placed better than the 5th ranked team qualifiers**. This story gets worse as we move back through team qualifiers. The average pursuit time gap between the last individual qualifier and the the 5th ranked team qualifier is a substantial 29.7 seconds.
+Across all sections, an average of 4 individual skiers that did not qualify for the state meet placed better than the 5th ranked team qualifiers. The average pursuit time gap between the last individual qualifier and the the 5th ranked team qualifier was a substantial 29.7 seconds. This story gets worse for lower team qualifiers, inflating to **17 individual skiers outperforming 7th ranked team qualifiers**.
 
 #### Girls
 
@@ -247,11 +249,11 @@ bqs <- nonqual_stats(sections_results %>% filter(gender == 'girls')) %>%
 kable(bqs)
 ```
 
-The deep and competitive section 4 again shows team qualifiers outperforming individual qualifiers; however, the typical case is that team qualifiers are vastly outperformed by individual qualifiers. Averages across sections look similar to the boys:
+The deep and competitive section 4 again shows team qualifiers outperforming individual qualifiers; however, the typical case is that team qualifiers are vastly outperformed by individual qualifiers. Averaging over sections looks similar to the boys:
 
 
 ```{r}
-bqs %>% summarize_all(mean) %>% select(-Section) %>% kable()
+bqs %>% summarize_all(function(x) round(mean(x))) %>% select(-Section) %>% kable()
 ```
 
 ## Conclusions
@@ -261,9 +263,9 @@ bqs %>% summarize_all(mean) %>% select(-Section) %>% kable()
 * 5-7 team qualifiers are unlikely to contribute to point scoring
     * There are, on average, 30-40 places between a team's 4th and 6th place skiers at the state meet
 * There are large numbers of individuals at sections meets who outperform 5-7 team qualifiers but do not qualify for the state meet.
-    * On average 5 individual skiers that fail to qualify outperform the 5th team qualifier, and over 10 skiers failing to qualify outperform the 6th team qualifier. 
+    * On average 5 individual skiers that fail to qualify outperform 5th ranked team qualifiers, and over 10 skiers failing to qualify outperform 6th ranked team qualifiers. 
 
-Occassionally 5th ranked team qualifier outperforms the last individual qualifier. In only one instance (section 4 girls) do 6th ranked team qualifiers also outperform the last individual. These findings indicate that qualifying team size could be shrunk to 5 skiers with little impact on team competitiveness, while bolstering the State Meet competition level and equitability.
+Occassionally 5th ranked team qualifiers outperform the last individual qualifier. In only one instance (section 4 girls) do 6th ranked team qualifiers also outperform the last individual. These findings indicate that qualifying team size could be shrunk to 5 skiers with little impact on team competitiveness, while bolstering the State Meet competition level and equitability.
 
 ## Disclaimer
 

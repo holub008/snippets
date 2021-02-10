@@ -1,8 +1,15 @@
 parse_time <- function(t) {
   x <- strsplit(t, ':')
-  m <- as.numeric(x[[1]][1])
-  s <- as.numeric(x[[1]][2])
-  return(m * 60 + s)
+  if (length(x[[1]]) > 2) {
+    h <- as.numeric(x[[1]][1])
+    m <- as.numeric(x[[1]][2])
+    s <- as.numeric(x[[1]][3])  
+  } else {
+    h <- 0
+    m <- as.numeric(x[[1]][1])
+    s <- as.numeric(x[[1]][2])  
+  }
+  return(h * 60 * 60 + m * 60 + s)
 }
 
 process_mtec <- function(filename) {
