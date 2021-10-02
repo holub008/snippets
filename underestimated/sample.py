@@ -25,5 +25,5 @@ all_records = nbib.read_file('./data/pubmed-cannotandu-set.nbib')
 # cannot and (underestimated or overestimated or understated or overstated)
 # is unable to do exact phrase searching with the stop word cannot, we cast a wide net and then filter it down
 # programmatically with case insensitive matching
-filtered_records = [r for r in all_records if 'abstract' in r and contains_interesting_phrase(r['abstract'])]
+filtered_records = [r for r in all_records if ('abstract' in r and contains_interesting_phrase(r['abstract'])) or ('title' in r and contains_interesting_phrase(r['title']))]
 print(pubmed_format_query(pmid_sample(filtered_records)))
