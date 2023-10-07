@@ -1,0 +1,368 @@
+---
+title: "Sisu Series Scoring Systems"
+output:
+  html_document:
+    df_print: paged
+date: September 28, 2023
+---
+
+```{r echo=FALSE, warning=FALSE, message=FALSE}
+knitr::opts_chunk$set(echo=FALSE, message = FALSE, warning = FALSE)
+library(tidyverse)
+
+data_2018 <- read.csv('~/birkielo/offline/2021_snapshot/birkielo_results.csv') %>%
+  filter(race_date >= '2018-09-01' & race_date <= '2019-05-01')
+```
+
+## Objective ⛷ 🏆 
+
+Let's find a scoring system suitable for the upcoming 23/24 Sisu Series! We want a scoring system that rewards:
+
+- **Participation**: When skiers participate in a larger number of events:
+    - Ski races benefit from increased registrations
+    - Finn benefits from wax/equipment sales
+- **Performance**: As an ethos, may the best skier win!
+
+Additionally, we want to promote **Fairness**. Ideally, racers will find in-kind competitors in the series, with the largest expected discriminators being age and gender. Fairness & comradery amongst competitors enchances the fun of racing!
+
+These factors compete, and it's unclear what balance we want to achieve. Below we'll assess several different systems for what *feels* right.
+
+Finally, the system should be **Interpretable**. If the scoring system isn't easily understood, skiers may not feel properly incentivized to participate or may not be drawn to the series at all.
+
+## Proposed Systems 🧮🔬
+
+All systems break men and women (and other non-binary categories, if needed) into separate categories, in the interest of **fairness**.
+
+All systems score upwards, i.e. more points are better (**interpretability**).
+
+### Points-per-Place (PPP)
+
+In PPP, top **performing** skiers are given the most points. The first place skier earns 100 points. Each place lost in the race results in the loss of `100 / participants` points, and the minimum score is 10 points. For example, in a race of 1000 participants:
+
+- 🥇 earns 100 points
+- 🥈 earns 99.9 points
+- 🥉 earns 99.8 points
+- ...
+- 999th place earns 10 points
+- 1000th place earns 10 points
+
+This system is relatively **interpretable**, and is capable of scoring variable-sized races with uniform weighting & differentiation of racers.
+
+#### Parameters
+
+- Minimum points: What is the minimum number of points a racer can earn in a race? I specified 10 above, but it could be anything. Anything > 0 increases **participation** incentive.
+
+### PPP with Event Incentives (PPP + EI)
+
+Event incentives give a skier points when they **participate** in a certain number of events. e.g. Karl completed 3 races and earned no point bonus. Rebecca completed 5 races and earned a 50 point bonus.
+
+#### Parameters
+
+Thresholds & points earned at each threshold. In the interest of **interpretability**, I suggest we only offer 1 or 2 thresholds. E.g. points at 5 & 10 races completed. Similarly, I believe having only a couple, higher thresholds maximizes **participation** in the series, compared to a system that just gives out points-per-race (PPP already does that anyways).
+
+### PPP + EI with Age Bonuses (PPP + EI + AB)
+
+Age bonuses aim to correct disparities in performance as skiers age. Granting more points to older skiers for a comparable placement to a younger skier may be considered more **fair** with respect to inherent capability.
+
+#### Parameters
+
+Multipliers used per age categories. We'll want to empirically assess how performance varies with age, so that we can create fair age bonuses. 
+
+Alternatively, we could use some recognized multipliers, e.g. published [here](https://web.archive.org/web/20090203010043/http://minnesotaskinnyskiseries.com/index.php?option=com_content&task=view&id=4).
+
+## Evaluating Systems 📊
+
+We'll use the 2018/2019 race season (last non-COVID race season I scraped data for) for simulating scoring systems. At time of writing, the planned events are:
+
+- Dec. 9 Nordic Opener Skadi Race - 8K @ Elm Creek - skate
+- Jan. 6 Sisu Fest - Ironwood, MI - 30K classic
+- Jan. 14 PreLoppet - Minneapolis, MN - Loppet Foundation - 18k skate
+- Jan 20 Woodland Loppet - 20k skate
+- Jan. 28 Marine O’Brien - Marine, MN - 12K classic
+- Feb. 4 City of Lakes Loppet - Minneapolis, MN - Loppet Foundation - 37km skate 
+- Feb. 10-11 Vasaloppet - Mora, MN - 42k classic
+- March 2 - Pepsi Challenge, Giant’s Ridge, 25K classic
+
+I do not have data for 3 of the planned events: Nordic Opener (didn't exist in 2018/19), Marine O'Brien (didn't occur in 2018/19) & Woodland Loppet (too few entrants for me to scrape in the past). Based on available data, we'll make the following substitutions (using events that have the same technique & fall on non-event weekends):
+
+- Nordic Opener → Great Bear Chase 25K skate
+- Woodland Loppet → Ski Rennet 22K skate
+- Marine O'Brien → Noquemanon 50K classic
+
+Here's a breakdown of the races we'll be simulating with:
+
+```{r}
+series_races <- data.frame(
+  event = c('Great Bear Chase', 'SISU Ski Fest', 'Pre-Loppet', 'Ski Rennet', 'Noquemanon Ski Marathon', 'City of Lakes Loppet', 'Vasaloppet USA', 'Pepsi Challenge'),
+  discipline = c('freestyle', 'classic', 'freestyle', 'freestyle', 'classic', 'freestyle', 'classic', 'classic'),
+  kilometers = c(25, 31, 17, 22, 50, 20, 42, 25),
+  event_number = c(1, 2, 3, 4, 5, 6, 7, 8)
+)
+
+series_results_2018 <- data_2018 %>% inner_join(series_races, by=c(event='event', discipline='discipline', kilometers = 'kilometers'))
+
+series_results_2018 %>%
+  group_by(event, discipline, kilometers, event_number) %>%
+  summarize(
+    `Total Racers` = n(),
+    `Women` = sum(gender == 'female'),
+    `Men` = sum(gender == 'male')
+  ) %>%
+  mutate(Event = event, Discipline = discipline, Kilometers = kilometers) %>%
+  ungroup() %>%
+  arrange(event_number) %>%
+  select(Event, Discipline, Kilometers, `Total Racers`, Women, Men) %>%
+  knitr::kable()
+```
+
+
+### ⚠ Limitations ⚠
+
+Because this is a retrospective simulation, racers didn't know which races to enter! That means there will be a lot fewer racers completing **all** events in the series, collecting particpation points, etc. This could have a big impact on the perceived quality of the scoring system.
+
+### PPP
+
+```{r}
+ppp <- function(gender_race_results) {
+  gender_race_results %>%
+    arrange(gender_place) %>%
+    mutate(
+      ppp_points = pmax(10, 100 - 100 * (row_number() - 1) / nrow(gender_race_results))
+    )
+}
+```
+
+
+#### First race points
+
+Here are the top 10 and bottom 10 men from the first simulated event of the season, GBC:
+
+```{r}
+m1_results <- series_results_2018 %>%
+  filter(event_number == 1) %>%
+  filter(gender == 'male')
+m1_points <- ppp(m1_results) %>%
+  mutate(
+    `First Name` = first_name,
+    `Last Name` = last_name,
+    `Overall Place` = overall_place,
+    `Gender Place` = gender_place,
+    `PPP Points` = ppp_points
+  ) %>%
+  select(`First Name`, `Last Name`, `Overall Place`, `Gender Place`, `PPP Points`) 
+
+rbind(m1_points %>% head(10), m1_points %>% tail(10))%>%
+  knitr::kable() 
+
+```
+And top/bottom 10 women:
+
+```{r}
+w1_results <- series_results_2018 %>%
+  filter(event_number == 1) %>%
+  filter(gender == 'female')
+w1_points <- ppp(w1_results) %>%
+  mutate(
+    `First Name` = first_name,
+    `Last Name` = last_name,
+    `Overall Place` = overall_place,
+    `Gender Place` = gender_place,
+    `PPP Points` = ppp_points
+  ) %>%
+  select(`First Name`, `Last Name`, `Overall Place`, `Gender Place`, `PPP Points`) 
+
+rbind(w1_points %>% head(10), w1_points %>% tail(10))%>%
+  knitr::kable() 
+```
+
+#### Overall rankings
+
+```{r}
+
+racers <- series_results_2018 %>%
+  distinct(racer_id, .keep_all=TRUE) %>%
+  mutate(
+    `First Name` = first_name,
+    `Last Name` = last_name,
+    `Gender` = gender
+  ) %>%
+  select(racer_id, `Last Name`, `First Name`, `Gender`)
+
+total_points <- data.frame()
+for (n in series_races$event_number) {
+  r <- series_results_2018 %>% filter(event_number == n) 
+  mr <- r %>% filter(gender == 'male')
+  wr <- r %>% filter(gender == 'female')
+  mp <- ppp(mr) %>% select(racer_id, ppp_points)
+  wp <- ppp(wr) %>% select(racer_id, ppp_points)
+  event_points <- rbind(mp, wp)
+  event_points$event_number <- n
+  total_points <- rbind(total_points, event_points)
+}
+
+summed_points <- total_points %>%
+  group_by(racer_id) %>%
+  summarize(
+    ppp_points = sum(ppp_points),
+    `Events` = n()
+  ) %>%
+  ungroup() %>%
+  inner_join(racers, by=c('racer_id'='racer_id'))
+```
+
+Now, running PPP over the entire series, the top 10 men:
+
+```{r}
+top_men <- summed_points %>%
+  filter(Gender == 'male') %>%
+  top_n(10, ppp_points) %>%
+  arrange(-ppp_points)
+top_men %>% 
+  mutate(`PPP Points` = ppp_points) %>%
+  select(`First Name`, `Last Name`, Events, `PPP Points`) %>%
+  knitr::kable()
+```
+
+And top 10 women:
+
+```{r}
+top_women <- summed_points %>%
+  filter(Gender == 'female') %>%
+  top_n(10, ppp_points) %>%
+  arrange(-ppp_points)
+top_women %>% 
+  mutate(`PPP Points` = ppp_points) %>%
+  select(`First Name`, `Last Name`, Events, `PPP Points`) %>%
+  knitr::kable()
+```
+
+#### Progression of top-10 racers
+
+Here's how top-10 racers accumulated points over the course of our simulated series:
+
+```{r}
+m_cumulative_points <- top_men %>% 
+  select(racer_id) %>%
+  inner_join(total_points, by=c('racer_id'='racer_id'), multiple = 'all') %>%
+  group_by(racer_id) %>%
+  arrange(event_number) %>%
+  mutate(
+    cumulative_points = cumsum(ppp_points)
+  ) %>%
+  ungroup()
+
+ggplot(m_cumulative_points) +
+  geom_line(aes(x=event_number, y=cumulative_points, color=as.factor(racer_id)), show.legend = FALSE) +
+  xlab('Event Number') + ylab('Cumulative PPP Points') + ggtitle("Top 10 Men's Points Progression")
+  
+```
+
+```{r}
+m_cumulative_points <- top_women %>% 
+  select(racer_id) %>%
+  inner_join(total_points, by=c('racer_id'='racer_id'), multiple = 'all') %>%
+  group_by(racer_id) %>%
+  arrange(event_number) %>%
+  mutate(
+    cumulative_points = cumsum(ppp_points)
+  ) %>%
+  ungroup()
+
+ggplot(m_cumulative_points) +
+  geom_line(aes(x=event_number, y=cumulative_points, color=as.factor(racer_id)), show.legend = FALSE) +
+  xlab('Event Number') + ylab('Cumulative PPP Points') + ggtitle("Top 10 Women's Points Progression")
+```
+### Analyzing Placement by Age
+
+We unfortunately (or maybe fortunately, if you're into personal data protection!) don't have ages for all racers. But here we'll look at percentage placement across age in _all_ races from the 2018/2019 season (including races outside the simulated series). We'll include a spline fit to help find any non-linearities, but our final solution should ideally derive from a linear fit for **interpretability**.
+
+```{r}
+
+racer_ages <- read.csv('/Users/kholub/racer_ages.csv')
+all_2018 <- data_2018 %>%
+  mutate(
+    kilometers = as.character(kilometers)
+  )
+age_data_2018 <- all_2018 %>% inner_join(racer_ages, by=c('racer_id' = 'id')) %>%
+  mutate(
+    age = (age_lower + age_upper) / 2
+  )
+
+race_sizes <- all_2018 %>%
+  group_by(event, kilometers, discipline, gender) %>%
+  summarize(
+    field_size = n(),
+    .groups='keep'
+  ) %>%
+  ungroup()
+
+age_percentages <- age_data_2018 %>%
+  inner_join(race_sizes, by=c('event'='event', 'kilometers'='kilometers', 'discipline'='discipline', 'gender'='gender')) %>%
+  mutate(
+    placement_percentage = gender_place / field_size
+  ) %>%
+  filter(placement_percentage <= 1) # due to scraping & birkielo weirdness, there's a handful of garbo points
+
+
+age_percentages %>%
+  ggplot(aes(x=age, y=placement_percentage)) +
+    geom_point() +
+    geom_smooth(color='red', method='gam') +
+    geom_smooth(method='lm')
+```
+
+Our linear fit has the following parameters:
+
+```{r}
+m_lin <- lm(placement_percentage ~ age, data=age_percentages)
+print(paste('Intercept: ', m_lin$coefficients[1]))
+print(paste('Slope: ', m_lin$coefficients[2]))
+```
+
+In a rudimentary interpretation, the model suggests that for every year of age added, a skier's average placement increases .5% in the field. E.g. the average 40 year old skier will be 10% lower (=10 points in PPP) than a 20 year old.
+
+However, the linear fit is probably a bit too biased. For our purposes, performance is almost flat to only slightly decreasing from 25-45. There also seems to be a lot of high performing youth skiers pulling down the %s for younger skiers.
+
+## Discussion
+
+In general, we see:
+
+- Who I consider to be good skiers (**performance**)
+- And/or skiers who participated in a larger number of events (**participation**)
+
+rise to the tops of the rankings. That's what we wanted! 
+
+Event incentives and age multipliers weren't added for a paucity of data. To implement these, we'll just need to hypothesize & guess. Some thoughts, unsupported by data:
+
+- Event Incentives should be relatively small. Participating in a larger number of events is already differentiating enough for top skiers.
+    - Consider: We make a 100 point incentive for completing 8 races. Olympian Brian Gregg completes 7 races, winning them all for `7 * 100 = 700`points. Weekend warrior Karl Holub completes 8 races and finishes ~80th percentile in all of them -> `80 * 8 = 640` points. Then Karl gets a 100 point bonus for `740` total points. Do we really think Karl is a more deserving champion? I don't! Brian still did a lot of races and clearly is a stronger skier.
+    - Mitigations:
+        - Keeping event incentives small, e.g. 15 points for completing 3 events, 30 for completing 60, and 45 points for completing all 9 (if we have 9 events total)
+        - Implementing "top N" scoring, where we only count a racer's best `N=6,7, or 8` events. This allows active racers to miss a few events, or have an off day or broken pole, and remain competitive.
+- Age multipliers: This comes with caveats about our philosophy (**fairness**) & data availability. And the data at my disposal is somewhat limited & biased. Nonetheless, we arrive at a pretty simple `1 year = + .5%`  rule from a highly simplified view of the data.     
+
+## Recommendation
+
+I vote we proceed with:
+
+- PPP: Each race is worth 100 points for the winner. The minimum points per race is 10. 
+- Event Incentives: values TBD on consultation with Allie and other skiers, but thinking <= 50 points on offer
+- Age multipliers (do not apply on top of event incentives): 
+    - **<= 45**:  multiplier = `1.0` (i.e. no multiplier)
+    - **> 45**: multiplier = `1.0 + Every year of age > 45 * .005`
+        - e.g. 55 year old gets 105% of the PPP points
+        - e.g. 75 year old gets 115% of the PPP points
+
+## Practical Considerations
+
+Up for discussion:
+
+1. We should emphasize that racers must sign up for races with the exact same name every event (e.g. pick one of Matt/Matthew), or they may not receive credit. Name variation makes automatically matching results across races challenging (basically, requires manual correction).
+2. In the event of two different racers with the same name we'll do our best to guess who is who (e.g. using age, city), but some manual curation may be required.
+3. In the interest of **interpretability**, it would be ideal to include a full accounting of points for each racer on our website (e.g. click a racer to see which races they did, placements, how many points were earned, any add on points, etc.). I'm not sure if/how we plan to host a site, but I'd be willing to figure out how to integrate this.
+4. Our life will be made easier by race coordinators sending us results. If that can't be coordinated, we'll be scraping websites and/or PDFs, which can be tedious. Not the end of the world, though, I'm a willing volunteer!
+5. If we use age multipliers, we may run into a problem of what to do when exact age data is not available When age is only published in ranges, we can just take the midpoint of the range? When there is no age published at all:
+    1. We can get age data from any other race the skier participated in, that did have age data
+    2. If we can't find that, we will simply give no multiplier.
+    3. Skiers can email in their age.
+
